@@ -1,0 +1,8 @@
+[package]
+name = "m6arr"
+version = "0.1.1"
+edition = "2021"
+license = "0BSD"
+description = "Fixed Size Heap Array"
+
+[dependencies]

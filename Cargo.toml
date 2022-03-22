@@ -1,0 +1,13 @@
+[package]
+name = "m6coll"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+# m6arr = "*"
+m6stack = "*"
+m6arr = { path = "./m6arr" }
+
+[workspace]
+members = ["m6arr", "m6entry"]
