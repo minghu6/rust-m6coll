@@ -2,7 +2,8 @@
 name = "m6entry"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+repository = "https://github.com/minghu6/rust-m6coll/m6entry"
+license = "0BSD"
+description = "Convenient key-value pair"
 
 [dependencies]

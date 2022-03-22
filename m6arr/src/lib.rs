@@ -20,7 +20,6 @@ pub struct Array<T> {
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////
 //// Implement
 
@@ -214,8 +213,6 @@ impl<T: fmt::Debug> fmt::Debug for Array<T> {
 macro_rules! array {
     ( $init:expr; $cap:expr ) => {
         {
-            use crate::Array;
-
             let init = $init;
             let cap = $cap;
 
@@ -224,8 +221,6 @@ macro_rules! array {
     };
     ($($item:expr),*) => {
         {
-            use crate::Array;
-
             #[allow(unused_mut)]
             let mut cnt = 0;
             $(

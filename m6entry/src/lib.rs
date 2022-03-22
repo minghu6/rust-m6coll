@@ -1,8 +1,57 @@
+use std::cmp::Ordering;
+
+/// KeyValue Pair
+#[derive(Debug)]
+pub struct Entry<K, V>(pub K, pub V);
+
+
+impl<K: PartialEq, V> PartialEq for Entry<K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<K: PartialOrd, V> PartialOrd for Entry<K, V> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<K: PartialEq, V> Eq for Entry<K, V> {
+}
+
+impl<K: PartialOrd, V> Ord for Entry<K, V> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(&other).unwrap()
+    }
+}
+
+
+
+
 #[cfg(test)]
-mod tests {
+mod test {
+    use super::*;
+
     #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    fn test_entry() {
+        use std::collections::BinaryHeap;
+        use std::cmp::Reverse;
+
+        let mut heap = BinaryHeap::new();
+
+        heap.push(Reverse(Entry(2, 3)));
+        heap.push(Reverse(Entry(1, 1)));
+        heap.push(Reverse(Entry(4, 16)));
+        heap.push(Reverse(Entry(2, 1)));
+
+
+        assert_eq!(heap.pop(), Some(Reverse(Entry(1, 1))));
+        assert_eq!(heap.pop(), Some(Reverse(Entry(2, 3))));
+        assert_eq!(heap.pop(), Some(Reverse(Entry(2, 1))));
+        assert_eq!(heap.pop(), Some(Reverse(Entry(4, 16))));
+
+        assert_eq!(heap.pop(), None);
+
     }
 }

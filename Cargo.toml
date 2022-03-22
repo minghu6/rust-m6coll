@@ -2,12 +2,15 @@
 name = "m6coll"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/minghu6/rust-m6coll/"
+license = "0BSD"
 
 
 [dependencies]
-# m6arr = "*"
-m6stack = "*"
-m6arr = { path = "./m6arr" }
+m6arr = { path = "./m6arr", version = "*" }
+m6entry = { path = "./m6entry", version = "*" }
+m6bitmap = { path = "./m6bitmap", version = "*" }
+
 
 [workspace]
-members = ["m6arr", "m6entry"]
+members = ["m6arr", "m6entry", "m6bitmap"]
