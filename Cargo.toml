@@ -8,9 +8,9 @@ description = "Small Smart Collections using prefix m6"
 
 
 [dependencies]
-m6arr = { path = "./m6arr", version = "*" }
-m6entry = { path = "./m6entry", version = "*" }
-m6bitmap = { path = "./m6bitmap", version = "*" }
+m6arr = { path = "./m6arr", version = "0.1.1" }
+m6entry = { path = "./m6entry", version = "0.1.0" }
+m6bitmap = { path = "./m6bitmap", version = "0.1.0" }
 
 
 [workspace]
