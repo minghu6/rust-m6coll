@@ -5,3 +5,5 @@
 
 - m6stack
 - m6arr
+- m6bitmap
+- m6entry
