@@ -1,0 +1,10 @@
+[package]
+name = "m6stack"
+version = "0.2.1"
+edition = "2018"
+readme = "README.md"
+repository = "https://github.com/minghu6/rust-m6stack.git"
+license = "0BSD"
+description = "A Small Stack"
+
+[dependencies]
