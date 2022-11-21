@@ -9,9 +9,6 @@ description = "Small Smart Collections using prefix m6"
 
 [dependencies]
 m6arr = { path = "./m6arr", version = "0.2.0" }
-m6entry = { path = "./m6entry", version = "0.1.0" }
+m6entry = { path = "./m6entry", version = "0.2.0" }
 m6bitmap = { path = "./m6bitmap", version = "0.1.0" }
 m6stack = { path = "./m6stack", version = "0.2.1" }
-
-[workspace]
-members = ["m6arr", "m6entry", "m6bitmap", "m6stack"]

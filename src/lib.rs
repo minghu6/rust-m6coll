@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 pub use m6arr::*;
-pub use m6entry::Entry;
+pub use m6entry::KVEntry;
 pub use m6bitmap::*;
 pub use m6stack::*;
 
@@ -52,7 +52,7 @@ impl<T: ToLeBytes> ToLeBytes for Array<T> {
     }
 }
 
-impl<K: ToLeBytes, V: ToLeBytes> ToLeBytes for Entry<K, V> {
+impl<K: ToLeBytes, V: ToLeBytes> ToLeBytes for KVEntry<K, V> {
     /// WARNING: untable across compilations for non-primitive value
     fn to_le_bytes(&self) -> Array<u8> {
         let size = size_of::<K>() + size_of::<V>();

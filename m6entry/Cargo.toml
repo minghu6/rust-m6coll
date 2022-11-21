@@ -1,9 +1,13 @@
 [package]
 name = "m6entry"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 repository = "https://github.com/minghu6/rust-m6coll/m6entry"
 license = "0BSD"
 description = "Convenient key-value pair"
 
 [dependencies]
+concat-idents = "1.0"
+
+[workspace]
+members = ["proc_macro"]

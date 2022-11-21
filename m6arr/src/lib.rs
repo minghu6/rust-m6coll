@@ -1,13 +1,39 @@
+// #![feature(generators)]
+// #![feature(iter_from_generator)]
+// #![feature(box_syntax)]
+// #![feature(type_alias_impl_trait)]
+#![feature(allocator_api)]
+#![feature(trusted_random_access)]
+#![feature(iter_next_chunk)]
+#![feature(iter_advance_by)]
+#![feature(core_intrinsics)]
+#![feature(exact_size_is_empty)]
+#![feature(dropck_eyepatch)]
+#![feature(inplace_iteration)]
+#![feature(trusted_len)]
+#![feature(min_specialization)]
+#![feature(array_into_iter_constructors)]
+#![feature(maybe_uninit_array_assume_init)]
+#![feature(maybe_uninit_uninit_array)]
+#![feature(strict_provenance)]
+#![feature(ptr_sub_ptr)]
+
 #![allow(path_statements)]
 
-use core::slice;
+pub mod into_iter;
+
 use std::{
-    alloc::{alloc_zeroed, Layout},
+    alloc::{alloc_zeroed, Global, Layout},
     fmt,
+    intrinsics::copy_nonoverlapping,
+    marker::PhantomData,
+    mem::ManuallyDrop,
     ops::{Deref, DerefMut, Index, IndexMut},
-    ptr::{null_mut, self},
-    slice::SliceIndex, intrinsics::copy_nonoverlapping,
+    ptr::{self, null_mut},
+    slice::{SliceIndex, self},
 };
+
+pub use into_iter::*;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +51,6 @@ pub struct Array<T> {
 
 /// Heap Array
 impl<T> Array<T> {
-
     ///////////////////////////////////////
     //// static method
 
@@ -56,6 +81,21 @@ impl<T> Array<T> {
 
             for i in 0..cap {
                 (*it.ptr.add(i)) = init;
+            }
+
+            it
+        }
+    }
+
+    pub fn new_with_clone(init: T, cap: usize) -> Self
+    where
+        T: Clone,
+    {
+        unsafe {
+            let it = Self::new(cap);
+
+            for i in 0..cap {
+                (*it.ptr.add(i)) = init.clone();
             }
 
             it
@@ -108,7 +148,10 @@ impl<T> Array<T> {
         self.ptr
     }
 
-    pub fn copy_from_slice(src: &[T]) -> Self where T: Copy {
+    pub fn copy_from_slice(src: &[T]) -> Self
+    where
+        T: Copy,
+    {
         let mut arr = Array::new(src.len());
         arr[..].copy_from_slice(src);
 
@@ -116,11 +159,24 @@ impl<T> Array<T> {
     }
 
 
-    pub fn clone_from_slice(src: &[T]) -> Self where T: Clone {
+    pub fn clone_from_slice(src: &[T]) -> Self
+    where
+        T: Clone,
+    {
         let mut arr = Array::new(src.len());
         arr[..].clone_from_slice(src);
 
         arr
+    }
+
+    pub fn move_from_into_iter(&mut self, src: impl IntoIterator<Item = T>) {
+        for (i, v) in src.into_iter().enumerate() {
+            if i >= self.len {
+                break;
+            }
+
+            self[i] = v;
+        }
     }
 }
 
@@ -136,7 +192,10 @@ impl<T> Drop for Array<T> {
             //     dealloc(self.ptr as *mut u8, Self::layout(self.len));
             // }
 
-            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(self.as_mut_ptr(), self.len))
+            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
+                self.as_mut_ptr(),
+                self.len,
+            ))
         }
     }
 }
@@ -181,13 +240,40 @@ impl<T: Clone> Clone for Array<T> {
     }
 }
 
-
 impl<T: Clone> From<&[T]> for Array<T> {
     fn from(src: &[T]) -> Self {
         let mut arr = Array::new(src.len());
         arr[..].clone_from_slice(src);
 
         arr
+    }
+}
+
+
+/// Impl copy from [std::vec::IntoIter]
+/// (https://doc.rust-lang.org/src/alloc/vec/mod.rs.html#2654)
+impl<T> IntoIterator for Array<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> IntoIter<T> {
+        unsafe {
+            let ptr = self.ptr as *mut T;
+            let cap = self.len;
+            let len = self.len;
+
+            // prevent auto drop
+            let _ = ManuallyDrop::new(self);
+            let alloc = ManuallyDrop::new(Global);
+
+            IntoIter {
+                phantom: PhantomData,
+                cap,
+                alloc,
+                ptr,
+                end: ptr.add(len),
+            }
+        }
     }
 }
 
@@ -294,7 +380,14 @@ mod tests {
 
         assert_eq!(arr0[..], arr1[..]);
 
-        println!("{:?}", f())
+        println!("{:?}", f());
+
+        /* test into_iter */
+        let arr = array![0, 1, 2, 3];
+
+        for (i, v) in arr.into_iter().enumerate() {
+            assert_eq!(i, v);
+            println!("{i} == {v}",);
+        }
     }
 }
-
