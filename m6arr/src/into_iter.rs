@@ -8,7 +8,7 @@ use core::iter::{
     FusedIterator, InPlaceIterable, SourceIter, TrustedLen, TrustedRandomAccessNoCoerce,
 };
 use core::marker::PhantomData;
-use core::mem::{self, ManuallyDrop, MaybeUninit};
+use core::mem::{self, MaybeUninit};
 use core::ptr;
 use core::slice;
 
@@ -18,11 +18,10 @@ pub struct IntoIter<
     T,
     A: Allocator = Global,
 > {
-    pub(super) phantom: PhantomData<T>,
+    pub(super) phantom: PhantomData<(T, A)>,
     pub(super) cap: usize,
     // the drop impl reconstructs a RawVec from buf, cap and alloc
     // to avoid dropping the allocator twice we need to wrap it into ManuallyDrop
-    pub(super) alloc: ManuallyDrop<A>,
     pub(super) ptr: *const T,
     pub(super) end: *const T,
 }
@@ -38,15 +37,8 @@ impl<T, A: Allocator> IntoIter<T, A> {
         unsafe { slice::from_raw_parts(self.ptr, self.len()) }
     }
 
-
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         unsafe { &mut *self.as_raw_mut_slice() }
-    }
-
-    /// Returns a reference to the underlying allocator.
-    #[inline]
-    pub fn allocator(&self) -> &A {
-        &self.alloc
     }
 
     fn as_raw_mut_slice(&mut self) -> *mut [T] {
@@ -234,11 +226,6 @@ impl<T, A: Allocator> ExactSizeIterator for IntoIter<T, A> {
 impl<T, A: Allocator> FusedIterator for IntoIter<T, A> {}
 
 unsafe impl<T, A: Allocator> TrustedLen for IntoIter<T, A> {}
-
-
-
-// TrustedRandomAccess (without NoCoerce) must not be implemented because
-
 
 
 unsafe impl<#[may_dangle] T, A: Allocator> Drop for IntoIter<T, A> {

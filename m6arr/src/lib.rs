@@ -129,10 +129,10 @@ impl<T> Array<T> {
         Layout::array::<T>(cap).unwrap()
     }
 
-    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &T> + 'a> {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
         let mut i = 0;
 
-        Box::new(std::iter::from_fn(move || {
+        std::iter::from_fn(move || {
             if i == self.len {
                 return None;
             }
@@ -141,11 +141,7 @@ impl<T> Array<T> {
             i += 1;
 
             res
-        }))
-    }
-
-    pub fn as_ptr(&self) -> *mut T {
-        self.ptr
+        })
     }
 
     pub fn copy_from_slice(src: &[T]) -> Self
@@ -157,7 +153,6 @@ impl<T> Array<T> {
 
         arr
     }
-
 
     pub fn clone_from_slice(src: &[T]) -> Self
     where
@@ -178,6 +173,54 @@ impl<T> Array<T> {
             self[i] = v;
         }
     }
+
+    /// realloc momory, WARNING: it would invalid the old ptr
+    pub fn resize(&mut self, new_cap: usize) where T: Default {
+        unsafe {
+            let new_ptr = if new_cap == 0 {
+                null_mut()
+            } else {
+                alloc_zeroed(Self::layout(new_cap)) as *mut T
+            };
+
+            let ptr = self.ptr as *mut T;
+            let cap = self.len;
+            let len = self.len;
+
+            let into_iter = IntoIter {
+                phantom: PhantomData::<(T, Global)>,
+                cap,
+                ptr,
+                end: ptr.add(len),
+            };
+
+            for (i, v) in into_iter.enumerate() {
+                if i >= self.len {
+                    break;
+                }
+
+                *new_ptr.add(i) = v;
+            }
+
+            for i in len..new_cap {
+                *new_ptr.add(i) = T::default();
+            }
+
+            self.len = new_cap;
+            self.ptr = new_ptr;
+        }
+
+    }
+
+    fn drop(ptr: *mut T, cap: usize) {
+        unsafe {
+            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
+                ptr,
+                cap,
+            ))
+        }
+    }
+
 }
 
 
@@ -187,16 +230,7 @@ impl<T> Array<T> {
 
 impl<T> Drop for Array<T> {
     fn drop(&mut self) {
-        unsafe {
-            // if self.len > 0 {
-            //     dealloc(self.ptr as *mut u8, Self::layout(self.len));
-            // }
-
-            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
-                self.as_mut_ptr(),
-                self.len,
-            ))
-        }
+        Self::drop(self.as_mut_ptr(), self.len)
     }
 }
 
@@ -264,12 +298,10 @@ impl<T> IntoIterator for Array<T> {
 
             // prevent auto drop
             let _ = ManuallyDrop::new(self);
-            let alloc = ManuallyDrop::new(Global);
 
             IntoIter {
                 phantom: PhantomData,
                 cap,
-                alloc,
                 ptr,
                 end: ptr.add(len),
             }
@@ -389,5 +421,16 @@ mod tests {
             assert_eq!(i, v);
             println!("{i} == {v}",);
         }
+
+        let mut arr = array![2, 3, 4];
+        arr.resize(4);
+
+        println!("arr: {arr:?}");
+
+        (arr[0], arr[2]) = (arr[2], arr[0]);
+
+
+        println!("after swap arr: {arr:?}");
+
     }
 }
