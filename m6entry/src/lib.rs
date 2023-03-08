@@ -21,6 +21,11 @@ pub struct TOEntry2<T1, T2>(pub T1, pub T2);
 ////////////////////////////////////////////////////////////////////////////////
 //// Implementation
 
+impl<K, V> KVEntry<K, V> {
+    pub fn drain(self) -> (K, V) {
+        (self.0, self.1)
+    }
+}
 
 impl<K: PartialEq, V> PartialEq for KVEntry<K, V> {
     fn eq(&self, other: &Self) -> bool {
@@ -34,14 +39,15 @@ impl<K: PartialOrd, V> PartialOrd for KVEntry<K, V> {
     }
 }
 
-impl<K: PartialEq, V> Eq for KVEntry<K, V> {
+impl<K: Eq, V> Eq for KVEntry<K, V> {
 }
 
-impl<K: PartialOrd, V> Ord for KVEntry<K, V> {
+impl<K: Ord, V> Ord for KVEntry<K, V> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(&other).unwrap()
     }
 }
+
 
 
 

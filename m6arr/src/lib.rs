@@ -21,6 +21,7 @@
 #![allow(path_statements)]
 
 pub mod into_iter;
+pub mod ordered_arr;
 
 use std::{
     alloc::{alloc_zeroed, Global, Layout},
