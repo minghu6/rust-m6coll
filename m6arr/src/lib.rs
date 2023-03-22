@@ -118,12 +118,24 @@ impl<T> Array<T> {
     ///////////////////////////////////////
     //// dynamic method
 
+    #[inline(always)]
     pub fn len(&self) -> usize {
         self.len
     }
 
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+
+    /// Returns a raw pointer to the vector’s buffer,
+    /// or a dangling raw pointer valid for zero sized reads
+    /// if the vector didn’t allocate.
+    pub fn as_ptr(&self) -> *const T {
+        self.ptr
+    }
+
+    pub fn as_mut_ptr(&self) -> *mut T {
+        self.ptr
     }
 
     pub fn layout(cap: usize) -> Layout {
@@ -143,36 +155,6 @@ impl<T> Array<T> {
 
             res
         })
-    }
-
-    pub fn copy_from_slice(src: &[T]) -> Self
-    where
-        T: Copy,
-    {
-        let mut arr = Array::new(src.len());
-        arr[..].copy_from_slice(src);
-
-        arr
-    }
-
-    pub fn clone_from_slice(src: &[T]) -> Self
-    where
-        T: Clone,
-    {
-        let mut arr = Array::new(src.len());
-        arr[..].clone_from_slice(src);
-
-        arr
-    }
-
-    pub fn move_from_into_iter(&mut self, src: impl IntoIterator<Item = T>) {
-        for (i, v) in src.into_iter().enumerate() {
-            if i >= self.len {
-                break;
-            }
-
-            self[i] = v;
-        }
     }
 
     /// realloc momory, WARNING: it would invalid the old ptr
@@ -368,12 +350,6 @@ mod tests {
     use super::Array;
     use crate::*;
 
-    // test from_raw_mut
-    fn f() -> Array<i32> {
-        let a = [10, 2, 4, 1];
-
-        Array::copy_from_slice(&a[..])
-    }
 
     #[test]
     fn test_arr() {
@@ -412,8 +388,6 @@ mod tests {
         arr0[..].copy_from_slice(&arr1[..]);
 
         assert_eq!(arr0[..], arr1[..]);
-
-        println!("{:?}", f());
 
         /* test into_iter */
         let arr = array![0, 1, 2, 3];

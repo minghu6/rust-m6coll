@@ -19,23 +19,35 @@ pub trait ToLeBytes {
 ///////////////////////////////////////
 //// Impl ToLeBytes
 
-impl ToLeBytes for u32 {
-    fn to_le_bytes(&self) -> Array<u8> {
-        Array::copy_from_slice(&(*self as u32).to_le_bytes()[..])
-    }
+macro_rules! impl_primitive_tlb {
+    ($($pty:ty),+) => {
+        $(
+            impl ToLeBytes for $pty {
+                fn to_le_bytes(&self) -> Array<u8> {
+                    let buf = (*self as u32).to_le_bytes();
+
+                    let arr = Array::new(buf.len());
+
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            buf.as_ptr(),
+                            arr.as_mut_ptr(),
+                            buf.len()
+                        );
+                    }
+
+                    arr
+                }
+            }
+        )+
+    };
 }
 
-impl ToLeBytes for u64 {
-    fn to_le_bytes(&self) -> Array<u8> {
-        Array::copy_from_slice(&(*self as u32).to_le_bytes()[..])
-    }
+
+impl_primitive_tlb! {
+    u32, u64, usize
 }
 
-impl ToLeBytes for usize {
-    fn to_le_bytes(&self) -> Array<u8> {
-        Array::copy_from_slice(&(*self as u32).to_le_bytes()[..])
-    }
-}
 
 impl<T: ToLeBytes> ToLeBytes for Array<T> {
     /// WARNING: untable across compilations for non-primitive value
