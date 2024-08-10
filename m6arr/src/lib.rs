@@ -1,12 +1,7 @@
-// #![feature(generators)]
-// #![feature(iter_from_generator)]
-// #![feature(box_syntax)]
-// #![feature(type_alias_impl_trait)]
 #![feature(allocator_api)]
 #![feature(trusted_random_access)]
 #![feature(iter_next_chunk)]
 #![feature(iter_advance_by)]
-#![feature(core_intrinsics)]
 #![feature(exact_size_is_empty)]
 #![feature(dropck_eyepatch)]
 #![feature(inplace_iteration)]
@@ -17,24 +12,19 @@
 #![feature(maybe_uninit_uninit_array)]
 #![feature(strict_provenance)]
 #![feature(ptr_sub_ptr)]
-
 #![allow(path_statements)]
 
-pub mod into_iter;
 pub mod ordered_arr;
 
 use std::{
-    alloc::{alloc_zeroed, Global, Layout},
+    alloc::{alloc_zeroed, Layout},
     fmt,
     intrinsics::copy_nonoverlapping,
-    marker::PhantomData,
-    mem::ManuallyDrop,
     ops::{Deref, DerefMut, Index, IndexMut},
     ptr::{self, null_mut},
-    slice::{SliceIndex, self},
+    slice::{self, SliceIndex},
+    vec::IntoIter,
 };
-
-pub use into_iter::*;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -158,7 +148,10 @@ impl<T> Array<T> {
     }
 
     /// realloc momory, WARNING: it would invalid the old ptr
-    pub fn resize(&mut self, new_cap: usize) where T: Default {
+    pub fn resize(&mut self, new_cap: usize)
+    where
+        T: Default,
+    {
         unsafe {
             let new_ptr = if new_cap == 0 {
                 null_mut()
@@ -170,12 +163,7 @@ impl<T> Array<T> {
             let cap = self.len;
             let len = self.len;
 
-            let into_iter = IntoIter {
-                phantom: PhantomData::<(T, Global)>,
-                cap,
-                ptr,
-                end: ptr.add(len),
-            };
+            let into_iter = Vec::from_raw_parts(ptr, len, cap).into_iter();
 
             for (i, v) in into_iter.enumerate() {
                 if i >= self.len {
@@ -192,18 +180,11 @@ impl<T> Array<T> {
             self.len = new_cap;
             self.ptr = new_ptr;
         }
-
     }
 
     fn drop(ptr: *mut T, cap: usize) {
-        unsafe {
-            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
-                ptr,
-                cap,
-            ))
-        }
+        unsafe { ptr::drop_in_place(ptr::slice_from_raw_parts_mut(ptr, cap)) }
     }
-
 }
 
 
@@ -216,7 +197,6 @@ impl<T> Drop for Array<T> {
         Self::drop(self.as_mut_ptr(), self.len)
     }
 }
-
 
 
 impl<T> Deref for Array<T> {
@@ -275,19 +255,7 @@ impl<T> IntoIterator for Array<T> {
 
     fn into_iter(self) -> IntoIter<T> {
         unsafe {
-            let ptr = self.ptr as *mut T;
-            let cap = self.len;
-            let len = self.len;
-
-            // prevent auto drop
-            let _ = ManuallyDrop::new(self);
-
-            IntoIter {
-                phantom: PhantomData,
-                cap,
-                ptr,
-                end: ptr.add(len),
-            }
+            Vec::from_raw_parts(self.ptr, self.len, self.len).into_iter()
         }
     }
 }
@@ -406,6 +374,5 @@ mod tests {
 
 
         println!("after swap arr: {arr:?}");
-
     }
 }

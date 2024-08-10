@@ -1,6 +1,3 @@
-#![feature(box_syntax)]
-
-
 use std::fmt;
 use std::iter;
 use std::iter::Rev;
@@ -60,7 +57,7 @@ impl<T> Stack<T> {
     /// FIFO
     pub fn queue_iter(&self) -> AnIteratorWrapper<&T> {
         AnIteratorWrapper {
-            iter: box self._value_vec.iter(),
+            iter: Box::new(self._value_vec.iter()),
         }
     }
 
