@@ -2,7 +2,7 @@
 name = "m6arr"
 version = "0.2.0"
 edition = "2021"
-repository = "https://github.com/minghu6/rust-m6coll/m6arr"
+repository = "https://github.com/minghu6/rust-m6coll/tree/master/m6arr"
 license = "0BSD"
 description = "Fixed Size Heap Array"
 

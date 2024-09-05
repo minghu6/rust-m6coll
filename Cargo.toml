@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 repository = "https://github.com/minghu6/rust-m6coll/"
 license = "0BSD"
-description = "Small Smart Collections using prefix m6"
+description = "Small Smart Collections Using Prefix m6"
 
 
 [dependencies]

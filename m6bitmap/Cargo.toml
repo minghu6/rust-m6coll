@@ -2,7 +2,7 @@
 name = "m6bitmap"
 version = "0.1.0"
 edition = "2021"
-repository = "https://github.com/minghu6/rust-m6coll/m6bitmap"
+repository = "https://github.com/minghu6/rust-m6coll/tree/master/m6bitmap"
 license = "0BSD"
 description = "Compact Map using continuously bits"
 
