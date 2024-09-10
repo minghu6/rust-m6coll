@@ -1,6 +1,6 @@
 [package]
 name = "m6stack"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2018"
 readme = "README.md"
 repository = "https://github.com/minghu6/rust-m6coll/tree/master/m6stack"
