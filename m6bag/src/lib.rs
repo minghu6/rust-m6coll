@@ -1,6 +1,7 @@
 use std::{
     borrow::Borrow,
-    collections::{btree_map::Entry, BTreeMap}, fmt,
+    collections::{btree_map::Entry, BTreeMap},
+    fmt,
 };
 
 
@@ -19,7 +20,10 @@ impl<T> BTreeBag<T> {
 
 impl<T: Ord> BTreeBag<T> {
     /// return same item number after insert
-    pub fn insert(&mut self, item: T) -> usize where T: Clone {
+    pub fn insert(&mut self, item: T) -> usize
+    where
+        T: Clone,
+    {
         match self.map.entry(item.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert(vec![item]);
@@ -53,7 +57,22 @@ impl<T: Ord> BTreeBag<T> {
         self.map.values().flatten()
     }
 
-    
+    pub fn get<Q: Ord>(&self, key: &Q) -> Option<impl Iterator<Item = &T>>
+    where
+        T: Borrow<Q>,
+    {
+        if let Some(coll) = self.map.get(key) {
+            if coll.is_empty() {
+                None
+            }
+            else {
+                Some(coll.iter())
+            }
+        }
+        else {
+            None
+        }
+    }
 }
 
 impl<T: fmt::Debug> fmt::Debug for BTreeBag<T> {
@@ -113,8 +132,8 @@ mod tests {
 
     #[test]
     fn test_case2() {
-        use derive_where::derive_where;
         use derive_new::new;
+        use derive_where::derive_where;
 
         #[derive(new)]
         #[derive_where(PartialOrd, Ord, PartialEq, Eq)]
@@ -123,23 +142,39 @@ mod tests {
             a1: usize,
             a2: usize,
             #[derive_where(skip)]
-            a3: usize
+            a3: usize,
         }
 
         let colls = vec![
-            A::new( 3, 1, 2),
-            A::new( 3, 1, 3),
-            A::new( 3, 1, 1),
-            A::new( 4, 1, 1),
-            A::new( 4, 1, 1),
-            A::new( 4, 2, 1),
-            A::new( 4, 2, 2),
+            A::new(3, 1, 2),
+            A::new(3, 1, 3),
+            A::new(3, 1, 1),
+            A::new(4, 1, 1),
+            A::new(4, 1, 1),
+            A::new(4, 2, 1),
+            A::new(4, 2, 2),
         ];
 
-        let bag = BTreeBag::from_iter(colls.iter().cloned()) ;
+        let bag = BTreeBag::from_iter(colls.iter().cloned());
 
-        assert_eq!(bag.count(&A::new( 3, 1, 5)), 3);
-        assert_eq!(bag.count(&A::new( 4, 2, 2)), 2);
+        assert_eq!(bag.count(&A::new(3, 1, 5)), 3);
+        assert_eq!(bag.count(&A::new(4, 2, 2)), 2);
+        assert!(bag.get(&A::new(5, 1, 3)).is_none());
+        assert_eq!(
+            bag.get(&A::new(4, 1, 4)).unwrap().collect::<Vec<&A>>(),
+            vec![
+                &A::new(4, 1, 1),
+                &A::new(4, 1, 1),
+            ]
+        );
+        assert_eq!(
+            bag.get(&A::new(3, 1, 0)).unwrap().collect::<Vec<&A>>(),
+            vec![
+                &A::new(3, 1, 2),
+                &A::new(3, 1, 3),
+                &A::new(3, 1, 1),
+            ]
+        );
 
         let ents = bag.flat_iter().cloned().collect::<Vec<_>>();
 
