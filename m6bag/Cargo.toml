@@ -1,9 +1,13 @@
 [package]
 name = "m6bag"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 repository = "https://github.com/minghu6/rust-m6coll/tree/master/m6bag"
 description = "Bag (multiset in C++)"
 authors = [ "minghu6 <a19678zy@163.com>" ]
 
 [dependencies]
+
+[dev-dependencies]
+derive-where = "1.2.7"
+derive-new = "0.7"
