@@ -10,7 +10,6 @@
 #![feature(array_into_iter_constructors)]
 #![feature(maybe_uninit_array_assume_init)]
 #![feature(maybe_uninit_uninit_array)]
-#![feature(strict_provenance)]
 #![feature(ptr_sub_ptr)]
 #![allow(path_statements)]
 

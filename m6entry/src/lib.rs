@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 //// Structure
 
 /// KeyValue Pair
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct KVEntry<K, V>(pub K, pub V);
 
 

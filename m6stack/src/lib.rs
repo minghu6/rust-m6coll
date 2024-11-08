@@ -42,7 +42,7 @@ impl<T> Stack<T> {
     }
 
     /// FILO
-    pub fn stack_iter<'a>(&'a self) -> impl Iterator<Item=&T> + 'a {
+    pub fn stack_iter<'a>(&'a self) -> impl Iterator<Item=&'a T> + 'a {
         let mut iter = self._value_vec.iter();
 
         std::iter::from_fn(move || {
