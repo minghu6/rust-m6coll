@@ -1,0 +1,13 @@
+[package]
+name = "m6ptr"
+version = "0.1.0"
+edition = "2021"
+description = ""
+authors = [ "minghu6 <a19678zy@163.com>" ]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+
+
