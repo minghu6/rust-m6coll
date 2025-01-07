@@ -1,4 +1,4 @@
-use std::{borrow::{Borrow, BorrowMut}, ops::{Deref, DerefMut}, ptr::NonNull};
+use std::{borrow::{Borrow, BorrowMut}, ops::{Deref, DerefMut}, ptr::NonNull, sync::Arc};
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Structures
@@ -15,8 +15,66 @@ pub struct OwnedPtr<T: ?Sized> {
     value: NonNull<T>,
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[repr(transparent)]
+pub struct ArcPtr<T: ?Sized> {
+    value: Arc<OwnedPtr<T>>
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[repr(transparent)]
+pub struct RoPtr<T: ?Sized> {
+    value: Ptr<T>
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //// Implementations
+
+impl<T: ?Sized> RoPtr<T> {
+    pub fn as_ref(&self) -> &T {
+        self.value.as_ref()
+    }
+}
+
+impl<T: ?Sized> Deref for RoPtr<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.value.as_ref()
+    }
+}
+
+impl<T> ArcPtr<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            value: Arc::new(OwnedPtr::new(value))
+        }
+    }
+}
+
+impl<T: ?Sized> ArcPtr<T> {
+    pub fn from_box(value: Box<T>) -> Self {
+        Self {
+            value: Arc::new(OwnedPtr::from_box(value)),
+        }
+    }
+
+    pub fn as_ref(&self) -> &T {
+        self.value.as_ref()
+    }
+
+    pub fn ptr(&self) -> RoPtr<T> {
+        RoPtr { value: self.value.ptr() }
+    }
+}
+
+impl<T: ?Sized> Deref for ArcPtr<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.value.as_ref()
+    }
+}
 
 impl<T> OwnedPtr<T> {
     pub fn new(value: T) -> Self {
