@@ -5,9 +5,12 @@ edition = "2024"
 
 [dependencies]
 proc-macro2 = "1"
-syn = { version = "2", features = ["full"] }
+syn = { version = "2", features = ["full"]}
 quote = "1.0"
 proc-macro-error = "1"
+derive-syn-parse = "0.2"
+
+m6syn = { path = "../../m6syn"}
 
 [lib]
 proc-macro = true
