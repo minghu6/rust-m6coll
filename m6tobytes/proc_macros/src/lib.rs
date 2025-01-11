@@ -1,22 +1,20 @@
 #![feature(extend_one)]
 
 use derive_syn_parse::Parse;
+use m6syn::Punctuated;
 use proc_macro::TokenStream;
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{
-    parse_macro_input,
-    spanned::Spanned,
     Attribute,
     Data::*,
     DeriveInput,
     Fields::*,
-    FieldsNamed, FieldsUnnamed, Ident, Meta, Token,
+    FieldsNamed, FieldsUnnamed, Ident, Item, Meta, Token,
     Type::{self, *},
-    Item
+    parse_macro_input,
+    spanned::Spanned,
 };
-
-use m6syn::Punctuated;
 
 const REPR_TYPES: [&str; 10] = [
     "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
@@ -88,10 +86,85 @@ pub fn derive_to_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
         unimplemented!()
     };
 
+    let mut expanded = match &item {
+        Item::Enum(item_enum) => {
+            let mut unnamed_fields = vec![];
+
+            for variant in item_enum.variants.iter() {
+                match &variant.fields {
+                    Named(_) => unimplemented!(),
+                    Unnamed(fields_unnamed) => {
+                        if fields_unnamed.unnamed.len() != 1 {
+                            abort!(fields_unnamed.unnamed.span(), "Expect just one field")
+                        }
+
+                        unnamed_fields.push(&variant.ident);
+                    },
+                    Unit => (),
+                }
+            }
+
+            let unnamed_fields_impl = unnamed_fields.into_iter().map(|field_name| quote! {
+                Self::#field_name(v) => unsafe { std::mem::transmute(v) },
+            }).collect::<proc_macro2::TokenStream>();
+
+            let dst_ty = Ident::new(match ty.to_string().as_str() {
+                "u8" => "u16",
+                "u16" => "u32",
+                "u32" => "u64",
+                "u64" => "u128",
+                _ => unimplemented!()
+            }, proc_macro2::Span::call_site());
+
+            quote! {
+                impl #name {
+                    pub fn to_bits(self) -> #ty {
+                        match self {
+                            #unnamed_fields_impl
+                            _ => unsafe { std::mem::transmute::<_, #dst_ty>(self) as #ty }
+                        }
+                    }
+                }
+            }
+        },
+        Item::Struct(_) | Item::Union(_) => quote! {
+            impl #name {
+                pub fn to_bits(self) -> #ty {
+                    unsafe { std::mem::transmute(self) }
+                }
+            }
+        },
+        _ => unimplemented!(),
+    };
+
+    expanded.extend_one(item.to_token_stream());
+
+    TokenStream::from(expanded)
+}
+
+///
+/// ```no_main
+/// impl Into<#ty> for #name {
+///     fn into(self) -> #ty {
+///         unsafe { std::mem::transmute(self.to_bits()) }
+///     }
+/// }
+/// ```
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn derive_to_bits_into(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(item as Item);
+    let ty = parse_macro_input!(attr as Ident);
+
+    let Some(name) = parse_item_name(&item)
+    else {
+        unimplemented!()
+    };
+
     let mut expanded = quote! {
-        impl #name {
-            pub fn to_bits(self) -> #ty {
-                unsafe { std::mem::transmute(self) }
+        impl Into<#ty> for #name {
+            fn into(self) -> #ty {
+                unsafe { std::mem::transmute(self.to_bits()) }
             }
         }
     };
@@ -190,8 +263,13 @@ pub fn derive_as(attr: TokenStream, item: TokenStream) -> TokenStream {
             "PartialEq" => quote! {
                 impl PartialEq for #name {
                     fn eq(&self, other: &Self) -> bool {
-                        let self_v: #ty = unsafe { transmute_copy(self) };
-                        let other_v: #ty = unsafe { transmute_copy(other) };
+                        let self_v: #ty = unsafe {
+                            std::mem::transmute_copy(self)
+                        };
+
+                        let other_v: #ty = unsafe {
+                            std::mem::transmute_copy(other)
+                        };
 
                         self_v == other_v
                     }
@@ -200,7 +278,9 @@ pub fn derive_as(attr: TokenStream, item: TokenStream) -> TokenStream {
             "Hash" => quote! {
                 impl std::hash::Hash for #name {
                     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                        let v: u16 = unsafe { transmute_copy(self) };
+                        let v: u16 = unsafe {
+                            std::mem::transmute_copy(self)
+                        };
                         v.hash(state);
                     }
                 }
