@@ -62,6 +62,66 @@ impl ToBytes for u8 {
     }
 }
 
+impl FromBytes for u16 {
+    fn from_le_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+
+    fn from_be_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        Self::from_be_bytes(bytes)
+    }
+}
+
+impl ToBytes for u16 {
+    fn to_le_bytes(self) -> [u8; size_of::<Self>()] {
+        self.to_le_bytes()
+    }
+
+    fn to_be_bytes(self) -> [u8; size_of::<Self>()] {
+        self.to_be_bytes()
+    }
+}
+
+impl FromBytes for u32 {
+    fn from_le_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+
+    fn from_be_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        Self::from_be_bytes(bytes)
+    }
+}
+
+impl ToBytes for u32 {
+    fn to_le_bytes(self) -> [u8; size_of::<Self>()] {
+        self.to_le_bytes()
+    }
+
+    fn to_be_bytes(self) -> [u8; size_of::<Self>()] {
+        self.to_be_bytes()
+    }
+}
+
+impl FromBytes for u64 {
+    fn from_le_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+
+    fn from_be_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
+        Self::from_be_bytes(bytes)
+    }
+}
+
+impl ToBytes for u64 {
+    fn to_le_bytes(self) -> [u8; size_of::<Self>()] {
+        self.to_le_bytes()
+    }
+
+    fn to_be_bytes(self) -> [u8; size_of::<Self>()] {
+        self.to_be_bytes()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -12,6 +12,7 @@ use syn::{
     Fields::*,
     FieldsNamed, FieldsUnnamed, Ident, Item, Meta, Token,
     Type::{self, *},
+    Path,
     parse_macro_input,
     spanned::Spanned,
 };
@@ -108,24 +109,40 @@ pub fn derive_to_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
                 Self::#field_name(v) => unsafe { std::mem::transmute(v) },
             }).collect::<proc_macro2::TokenStream>();
 
-            let dst_ty = Ident::new(match ty.to_string().as_str() {
-                "u8" => "u16",
-                "u16" => "u32",
-                "u32" => "u64",
-                "u64" => "u128",
-                _ => unimplemented!()
-            }, proc_macro2::Span::call_site());
-
-            quote! {
-                impl #name {
-                    pub fn to_bits(self) -> #ty {
-                        match self {
-                            #unnamed_fields_impl
-                            _ => unsafe { std::mem::transmute::<_, #dst_ty>(self) as #ty }
+            if unnamed_fields_impl.is_empty() {
+                quote! {
+                    impl #name {
+                        pub fn to_bits(self) -> #ty {
+                            match self {
+                                #unnamed_fields_impl
+                                _ => unsafe { std::mem::transmute(self) }
+                            }
                         }
                     }
                 }
             }
+            else {
+                let dst_ty = Ident::new(match ty.to_string().as_str() {
+                    "u8" => "u16",
+                    "u16" => "u32",
+                    "u32" => "u64",
+                    "u64" => "u128",
+                    _ => unimplemented!()
+                }, proc_macro2::Span::call_site());
+
+                quote! {
+                    impl #name {
+                        pub fn to_bits(self) -> #ty {
+                            match self {
+                                #unnamed_fields_impl
+                                _ => unsafe { std::mem::transmute::<_, #dst_ty>(self) as #ty }
+                            }
+                        }
+                    }
+                }
+            }
+
+
         },
         Item::Struct(_) | Item::Union(_) => quote! {
             impl #name {
@@ -154,7 +171,7 @@ pub fn derive_to_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn derive_to_bits_into(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as Item);
-    let ty = parse_macro_input!(attr as Ident);
+    let ty = parse_macro_input!(attr as Path);
 
     let Some(name) = parse_item_name(&item)
     else {
