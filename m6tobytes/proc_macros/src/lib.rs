@@ -17,6 +17,12 @@ use syn::{
     spanned::Spanned,
 };
 
+macro_rules! ident {
+    ($s:expr) => {
+        Ident::new($s, proc_macro2::Span::call_site())
+    };
+}
+
 const REPR_TYPES: [&str; 10] = [
     "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
 ];
@@ -122,13 +128,13 @@ pub fn derive_to_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
             else {
-                let dst_ty = Ident::new(match ty.to_string().as_str() {
+                let dst_ty = ident!(match ty.to_string().as_str() {
                     "u8" => "u16",
                     "u16" => "u32",
                     "u32" => "u64",
                     "u64" => "u128",
                     _ => unimplemented!()
-                }, proc_macro2::Span::call_site());
+                });
 
                 quote! {
                     impl #name {
@@ -142,7 +148,6 @@ pub fn derive_to_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
 
-
         },
         Item::Struct(_) | Item::Union(_) => quote! {
             impl #name {
@@ -154,9 +159,42 @@ pub fn derive_to_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => unimplemented!(),
     };
 
-    expanded.extend_one(item.to_token_stream());
+    expanded.extend(quote! {
+        impl Into<#ty> for #name {
+            fn into(self) -> #ty {
+                self.to_bits()
+            }
+        }
+
+        #item
+    });
 
     TokenStream::from(expanded)
+}
+
+/// impl `pub fn from_xx(value: #ty) -> Self`
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn derive_from_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(item as Item);
+    let ty = parse_macro_input!(attr as Ident);
+
+    let Some(name) = parse_item_name(&item)
+    else {
+        unimplemented!()
+    };
+
+    let fname = ident!(format!("from_{}", ty.to_string()).as_str());
+
+    TokenStream::from(quote! {
+        impl #name {
+            pub unsafe fn #fname(value: #ty) -> Self {
+                unsafe { std::mem::transmute(value) }
+            }
+        }
+
+        #item
+    })
 }
 
 ///
