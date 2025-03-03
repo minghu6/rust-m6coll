@@ -224,12 +224,48 @@ impl<'a, T: Clone + Eq> PartialEq for FlatCow<'a, [T]> {
     }
 }
 
+impl<'a, T: Clone + Eq> PartialEq<[T]> for FlatCow<'a, [T]> {
+    fn eq(&self, other: &[T]) -> bool {
+        let lf = &self[..];
+        let rh = other;
+
+        lf == rh
+    }
+}
+
+impl<'a, T: Clone + Eq> PartialEq<&[T]> for FlatCow<'a, [T]> {
+    fn eq(&self, other: &&[T]) -> bool {
+        let lf = &self[..];
+        let rh = *other;
+
+        lf == rh
+    }
+}
+
 impl<'a, T: Clone + Eq> Eq for FlatCow<'a, [T]> {}
 
 impl<'a, T: Clone + Ord> PartialOrd for FlatCow<'a, [T]> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         let lf = &self[..];
         let rh = &other[..];
+
+        lf.partial_cmp(rh)
+    }
+}
+
+impl<'a, T: Clone + Ord> PartialOrd<[T]> for FlatCow<'a, [T]> {
+    fn partial_cmp(&self, other: &[T]) -> Option<std::cmp::Ordering> {
+        let lf = &self[..];
+        let rh = other;
+
+        lf.partial_cmp(rh)
+    }
+}
+
+impl<'a, T: Clone + Ord> PartialOrd<&[T]> for FlatCow<'a, [T]> {
+    fn partial_cmp(&self, other: &&[T]) -> Option<std::cmp::Ordering> {
+        let lf = &self[..];
+        let rh = *other;
 
         lf.partial_cmp(rh)
     }
@@ -316,12 +352,48 @@ impl<'a> PartialEq for FlatCow<'a, str> {
     }
 }
 
+impl<'a> PartialEq<str> for FlatCow<'a, str> {
+    fn eq(&self, other: &str) -> bool {
+        let lf = &self[..];
+        let rh = other;
+
+        lf == rh
+    }
+}
+
+impl<'a> PartialEq<&str> for FlatCow<'a, str> {
+    fn eq(&self, other: &&str) -> bool {
+        let lf = &self[..];
+        let rh = *other;
+
+        lf == rh
+    }
+}
+
 impl<'a> Eq for FlatCow<'a, str> {}
 
 impl<'a> PartialOrd for FlatCow<'a, str> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         let lf = &self[..];
         let rh = &other[..];
+
+        lf.partial_cmp(rh)
+    }
+}
+
+impl<'a> PartialOrd<str> for FlatCow<'a, str> {
+    fn partial_cmp(&self, other: &str) -> Option<std::cmp::Ordering> {
+        let lf = &self[..];
+        let rh = other;
+
+        lf.partial_cmp(rh)
+    }
+}
+
+impl<'a> PartialOrd<&str> for FlatCow<'a, str> {
+    fn partial_cmp(&self, other: &&str) -> Option<std::cmp::Ordering> {
+        let lf = &self[..];
+        let rh = *other;
 
         lf.partial_cmp(rh)
     }
