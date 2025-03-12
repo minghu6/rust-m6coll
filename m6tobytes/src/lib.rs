@@ -1,6 +1,5 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
-#![feature(maybe_uninit_uninit_array)]
 #![feature(slice_as_array)]
 
 pub use proc_macros::*;
