@@ -1,20 +1,7 @@
-#![feature(trait_alias)]
-
 use std::{
     borrow::{Borrow, BorrowMut}, cell::OnceCell, ops::{Deref, DerefMut}, ptr::NonNull, sync::Arc
 };
 
-#[cfg(feature = "cow")]
-mod cow;
-
-#[cfg(feature = "bytestr")]
-mod bytestr;
-
-#[cfg(feature = "cow")]
-pub use cow::*;
-
-#[cfg(feature = "bytestr")]
-pub use bytestr::*;
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Structures

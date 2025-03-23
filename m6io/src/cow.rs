@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
     ops::{
         Deref, Index, Range, RangeBounds, RangeFrom, RangeFull,
-        RangeInclusive, RangeTo,
+        RangeInclusive, RangeTo, RangeToInclusive,
     },
     slice::SliceIndex,
     str::Utf8Error,
@@ -23,6 +23,7 @@ pub trait SliceLike<Output: ?Sized = Self>: IndexRangeBounds<Output> {
 
 pub trait IndexRangeBounds<Output: ?Sized> = Index<RangeFrom<usize>, Output = Output>
     + Index<RangeTo<usize>, Output = Output>
+    + Index<RangeToInclusive<usize>, Output = Output>
     + Index<Range<usize>, Output = Output>
     + Index<RangeFull, Output = Output>
     + Index<RangeInclusive<usize>, Output = Output>;
@@ -64,7 +65,6 @@ impl SliceLike for str {
         self.len()
     }
 }
-
 
 impl<'a, B> CowBuf<'a, B>
 where
@@ -167,6 +167,19 @@ where
     }
 }
 
+impl<'a, B> AsRef<B> for FlatCow<'a, B>
+where
+    B: 'a + ToOwned + ?Sized + SliceLike,
+    B::Owned: Deref<Target = B>,
+{
+    fn as_ref(&self) -> &B {
+        match self {
+            Self::Borrowed { root, start, end } => &root[*start..*end],
+            Self::Owned(owned) => &owned[..],
+        }
+    }
+}
+
 impl<'a, B> Clone for FlatCow<'a, B>
 where
     B: 'a + ToOwned + ?Sized,
@@ -213,20 +226,27 @@ where
         }
     }
 
-    pub fn to_cow_buf(self) -> CowBuf<'a, B> {
+    pub fn into_cow_buf(self) -> CowBuf<'a, B> {
         CowBuf { value: self }
     }
 
+    pub fn into_owned(self) -> B::Owned {
+        match self {
+            FlatCow::Borrowed { root, start, end } => root[start..end].to_owned(),
+            FlatCow::Owned(owned) => owned,
+        }
+    }
+}
+
+impl<'a, T: Clone> FlatCow<'a, [T]> {
     /// ```no_main
     /// Self::Borrowed => Self::Borrowed
     /// Self::Owned => Self::Owned
     /// ``````
-    pub fn as_slice_cow<I: RangeBounds<usize> + SliceIndex<B, Output = B>>(
+    pub fn as_slice_cow<I: RangeBounds<usize> + SliceIndex<[T], Output = [T]>>(
         &self,
         index: I,
     ) -> Self
-    where
-        B::Owned: Deref<Target = B> + Index<I, Output = B>,
     {
         match self {
             Self::Borrowed { root, start, end } => {
@@ -236,6 +256,37 @@ where
             }
             Self::Owned(owned) => Self::Owned(owned[index].to_owned()),
         }
+    }
+}
+
+impl<'a> FlatCow<'a, str> {
+    /// ```no_main
+    /// Self::Borrowed => Self::Borrowed
+    /// Self::Owned => Self::Owned
+    /// ``````
+    pub fn as_slice_cow<I: RangeBounds<usize> + SliceIndex<str, Output = str>>(
+        &self,
+        index: I,
+    ) -> Self
+    {
+        match self {
+            Self::Borrowed { root, start, end } => {
+                let (start, end) = flatcow_union_range(*start..*end, index);
+
+                Self::Borrowed { root, start, end }
+            }
+            Self::Owned(owned) => Self::Owned(owned[index].to_owned()),
+        }
+    }
+}
+
+impl<'a, B> From<&'a B> for FlatCow<'a, B>
+where
+    B: 'a + ToOwned + ?Sized + SliceLike,
+    B::Owned: Deref<Target = B>,
+{
+    fn from(value: &'a B) -> Self {
+        Self::borrow_new(value)
     }
 }
 
@@ -269,7 +320,7 @@ where
     }
 }
 
-impl<'a, B: Clone + Display> Display for FlatCow<'a, B>
+impl<'a, B> Display for FlatCow<'a, B>
 where
     B: 'a + ToOwned + ?Sized + SliceLike + Display,
     B::Owned: Deref<Target = B>,
@@ -279,40 +330,15 @@ where
     }
 }
 
-impl<'a, B> PartialEq for FlatCow<'a, B>
+impl<'a, B, U> PartialEq<U> for FlatCow<'a, B>
 where
+    U: ?Sized + AsRef<B>,
     B: 'a + ToOwned + ?Sized + SliceLike + Eq,
     B::Owned: Deref<Target = B>,
 {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, other: &U) -> bool {
         let lf = &self[..];
-        let rh = &other[..];
-
-        lf == rh
-    }
-}
-
-impl<'a, B> PartialEq<B> for FlatCow<'a, B>
-where
-    B: 'a + ToOwned + ?Sized + SliceLike + Eq,
-    B::Owned: Deref<Target = B>,
-{
-    fn eq(&self, other: &B) -> bool {
-        let lf = &self[..];
-        let rh = other;
-
-        lf == rh
-    }
-}
-
-impl<'a, B> PartialEq<&B> for FlatCow<'a, B>
-where
-    B: 'a + ToOwned + ?Sized + SliceLike + Eq,
-    B::Owned: Deref<Target = B>,
-{
-    fn eq(&self, other: &&B) -> bool {
-        let lf = &self[..];
-        let rh = *other;
+        let rh = other.as_ref();
 
         lf == rh
     }
@@ -325,44 +351,20 @@ where
 {
 }
 
-impl<'a, B> PartialOrd for FlatCow<'a, B>
+impl<'a, B, U> PartialOrd<U> for FlatCow<'a, B>
 where
+    U: ?Sized + AsRef<B>,
     B: 'a + ToOwned + ?Sized + SliceLike + Ord,
     B::Owned: Deref<Target = B>,
 {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &U) -> Option<std::cmp::Ordering> {
         let lf = &self[..];
-        let rh = &other[..];
+        let rh = other.as_ref();
 
         lf.partial_cmp(rh)
     }
 }
 
-impl<'a, B> PartialOrd<B> for FlatCow<'a, B>
-where
-    B: 'a + ToOwned + ?Sized + SliceLike + Ord,
-    B::Owned: Deref<Target = B>,
-{
-    fn partial_cmp(&self, other: &B) -> Option<std::cmp::Ordering> {
-        let lf = &self[..];
-        let rh = other;
-
-        lf.partial_cmp(rh)
-    }
-}
-
-impl<'a, B> PartialOrd<&B> for FlatCow<'a, B>
-where
-    B: 'a + ToOwned + ?Sized + SliceLike + Ord,
-    B::Owned: Deref<Target = B>,
-{
-    fn partial_cmp(&self, other: &&B) -> Option<std::cmp::Ordering> {
-        let lf = &self[..];
-        let rh = *other;
-
-        lf.partial_cmp(rh)
-    }
-}
 
 impl<'a, B> Ord for FlatCow<'a, B>
 where
@@ -447,8 +449,16 @@ fn flatcow_union_range<I: RangeBounds<usize>>(
 
 #[cfg(feature = "bytestr")]
 mod support_bytestr {
+    use core::slice::SlicePattern;
+
     use super::*;
     use crate::bytestr::{ByteStr, ByteString};
+
+    impl SliceLike for ByteStr {
+        fn len(&self) -> usize {
+            self.as_slice().len()
+        }
+    }
 
     impl<'a> CowBuf<'a, ByteStr> {
         pub fn push(&mut self, b: u8) {
@@ -463,190 +473,39 @@ mod support_bytestr {
         }
     }
 
-    impl<'a> Deref for FlatCow<'a, ByteStr> {
-        type Target = [u8];
+    impl<'a> From<&FlatCow<'a, ByteStr>> for CowBuf<'a, ByteStr> {
+        fn from(value: &FlatCow<'a, ByteStr>) -> Self {
+            let cow = match value {
+                FlatCow::Borrowed { root, start, .. } => FlatCow::Borrowed {
+                    root: *root,
+                    start: *start,
+                    end: *start,
+                },
+                FlatCow::Owned(..) => FlatCow::Owned(ByteString::new()),
+            };
 
-        fn deref(&self) -> &Self::Target {
-            match self {
-                Self::Borrowed { root, start, end } => &root[*start..*end],
-                Self::Owned(owned) => owned,
-            }
-        }
-    }
-
-    impl<'a> From<&'a str> for FlatCow<'a, str> {
-        fn from(value: &'a str) -> Self {
-            Self::borrow_new(value)
-        }
-    }
-
-    impl<'a> From<&'a ByteStr> for FlatCow<'a, ByteStr> {
-        fn from(value: &'a ByteStr) -> Self {
-            Self::borrow_new(value)
-        }
-    }
-
-    impl<'a> From<&'a [u8]> for FlatCow<'a, ByteStr> {
-        fn from(value: &'a [u8]) -> Self {
-            Self::borrow_new(value.into())
+            Self { value: cow }
         }
     }
 
     impl<'a> FlatCow<'a, ByteStr> {
-        pub fn borrow_new(root: &'a ByteStr) -> Self {
-            Self::Borrowed {
-                root,
-                start: 0,
-                end: root.len(),
-            }
-        }
-
-        /// Clone the entire slice if it's not already owned.
-        pub fn to_mut(&mut self) -> &mut <ByteStr as ToOwned>::Owned {
-            match *self {
-                Self::Borrowed { root, start, end } => {
-                    *self = Self::Owned(ByteString::from(&root[start..end]));
-
-                    if let Self::Owned(owned) = self {
-                        owned
-                    }
-                    else {
-                        unreachable!()
-                    }
-                }
-                Self::Owned(ref mut owned) => owned,
-            }
-        }
-
-        pub fn to_cow_buf(self) -> CowBuf<'a, ByteStr> {
-            CowBuf { value: self }
-        }
-
         /// ```no_main
         /// Self::Borrowed => Self::Borrowed
         /// Self::Owned => Self::Owned
         /// ``````
-        pub fn as_slice_cow<
-            I: RangeBounds<usize> + SliceIndex<[u8], Output = [u8]>,
-        >(
+        pub fn as_slice_cow<I: RangeBounds<usize> + SliceIndex<[u8], Output = [u8]>>(
             &self,
             index: I,
-        ) -> Self {
+        ) -> Self
+        {
             match self {
                 Self::Borrowed { root, start, end } => {
-                    let (start, end) =
-                        flatcow_union_range(*start..*end, index);
+                    let (start, end) = flatcow_union_range(*start..*end, index);
 
                     Self::Borrowed { root, start, end }
                 }
-                Self::Owned(owned) => {
-                    Self::Owned(owned[index].to_owned().into())
-                }
+                Self::Owned(owned) => Self::Owned(owned[index].to_owned().into()),
             }
-        }
-    }
-
-    impl<'a> Debug for FlatCow<'a, ByteStr> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            if f.alternate() {
-                write!(f, "{:#?}", self)
-            }
-            else {
-                write!(f, "{:?}", self)
-            }
-        }
-    }
-
-    impl<'a> Display for FlatCow<'a, ByteStr> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}", self)
-        }
-    }
-
-    impl<'a> PartialEq for FlatCow<'a, ByteStr> {
-        fn eq(&self, other: &Self) -> bool {
-            let lf = &self[..];
-            let rh = &other[..];
-
-            lf == rh
-        }
-    }
-
-    impl<'a> PartialEq<ByteStr> for FlatCow<'a, ByteStr> {
-        fn eq(&self, other: &ByteStr) -> bool {
-            let lf = self;
-            let rh = other;
-
-            lf == rh
-        }
-    }
-
-    impl<'a> PartialEq<&ByteStr> for FlatCow<'a, ByteStr> {
-        fn eq(&self, other: &&ByteStr) -> bool {
-            let lf = self;
-            let rh = *other;
-
-            lf == rh
-        }
-    }
-
-    impl<'a> PartialEq<[u8]> for FlatCow<'a, ByteStr> {
-        fn eq(&self, other: &[u8]) -> bool {
-            let lf = &self[..];
-            let rh = other;
-
-            lf == rh
-        }
-    }
-
-    impl<'a> PartialEq<&[u8]> for FlatCow<'a, ByteStr> {
-        fn eq(&self, other: &&[u8]) -> bool {
-            let lf = &self[..];
-            let rh = *other;
-
-            lf == rh
-        }
-    }
-
-    impl<'a> Eq for FlatCow<'a, ByteStr> {}
-
-    impl<'a> PartialOrd for FlatCow<'a, ByteStr> {
-        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-            let lf = &self[..];
-            let rh = &other[..];
-
-            lf.partial_cmp(rh)
-        }
-    }
-
-    impl<'a> PartialOrd<ByteStr> for FlatCow<'a, ByteStr> {
-        fn partial_cmp(&self, other: &ByteStr) -> Option<std::cmp::Ordering> {
-            let lf = &self[..];
-            let rh = other;
-
-            lf.partial_cmp(rh)
-        }
-    }
-
-    impl<'a> PartialOrd<&ByteStr> for FlatCow<'a, ByteStr> {
-        fn partial_cmp(&self, other: &&ByteStr) -> Option<std::cmp::Ordering> {
-            let lf = &self[..];
-            let rh = *other;
-
-            lf.partial_cmp(rh)
-        }
-    }
-
-    impl<'a> Ord for FlatCow<'a, ByteStr> {
-        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-            self.partial_cmp(other).unwrap()
-        }
-    }
-
-    impl<'a> Hash for FlatCow<'a, ByteStr> {
-        fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-            let it = &self[..];
-            it.hash(state);
         }
     }
 

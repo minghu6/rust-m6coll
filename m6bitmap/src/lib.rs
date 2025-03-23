@@ -1,6 +1,5 @@
 use std::{
-    alloc::{alloc_zeroed, Layout},
-    ptr::{drop_in_place, null_mut, slice_from_raw_parts_mut},
+    alloc::{alloc_zeroed, Layout}, ptr::{drop_in_place, null_mut, slice_from_raw_parts_mut}
 };
 
 
@@ -39,9 +38,8 @@ pub const fn bit_get(val: u8, i: u8) -> bool {
 
 impl BitMap {
     /// Bits Len (Cap)
-    pub fn new(cap: u128) -> Self {
+    pub fn new(cap: usize) -> Self {
         debug_assert!(cap % 8 == 0);
-        debug_assert!((cap / 8) <= usize::MAX as u128);
 
         let cap_byte = (cap / 8) as usize;
 
@@ -56,11 +54,11 @@ impl BitMap {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.cap_byte
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.cap_byte == 0
     }
 
@@ -132,7 +130,7 @@ mod tests {
     #[test]
     fn test_bitmap() {
         let max = 256;
-        let mut map = BitMap::new(max as u128);
+        let mut map = BitMap::new(max);
 
         for i in 0..max {
             for j in 0..i {

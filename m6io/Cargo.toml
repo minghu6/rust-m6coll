@@ -1,0 +1,18 @@
+[package]
+name = "m6io"
+version = "0.1.0"
+edition = "2024"
+description = ""
+authors = [ "minghu6 <a19678zy@163.com>" ]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+m6bitmap = { path = "../m6bitmap", optional = true }
+
+[features]
+default = []
+cow = []
+bytestr = ["bitmap"]
+bitmap = ["dep:m6bitmap"]
+full = ["cow", "bytestr", "bitmap"]
