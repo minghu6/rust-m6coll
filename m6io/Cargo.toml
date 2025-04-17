@@ -9,10 +9,11 @@ authors = [ "minghu6 <a19678zy@163.com>" ]
 
 [dependencies]
 m6bitmap = { path = "../m6bitmap", optional = true }
+nom = { version = "8", optional = true }
 
 [features]
 default = []
 cow = []
-bytestr = ["bitmap"]
+bstr = ["bitmap"]
 bitmap = ["dep:m6bitmap"]
-full = ["cow", "bytestr", "bitmap"]
+nom = ["dep:nom"]

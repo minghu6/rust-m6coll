@@ -6,34 +6,47 @@ use std::{
     borrow::{Borrow, BorrowMut},
     io::Write,
     ops::{
-        Deref, DerefMut, Index, IndexMut, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive
+        Deref, DerefMut, Index, IndexMut, Range, RangeFrom, RangeFull,
+        RangeInclusive, RangeTo, RangeToInclusive,
     },
     slice::SliceIndex,
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+//// Macros
+
+#[macro_export]
+macro_rules! bstr {
+    ($s:literal) => {
+        ByteStr::new($s.as_bytes())
+    };
+}
+
+////////////////////////////////////////////////////////////////////////////////
 //// Traits
 
-pub trait ConsumeBytesInto: Sized {
+pub trait ConsumeByteStr: Sized {
     type Err;
 
     /// (Self, offset)
-    fn consume_bytes_into(bytes: &ByteStr)
-    -> Result<(Self, usize), Self::Err>;
+    fn consume_bstr(bytes: &ByteStr) -> Result<(Self, usize), Self::Err>;
 }
 
-pub trait FromBytesInto: Sized {
+pub trait FromByteStr: Sized {
     type Err;
 
-    fn from_bytes_into(bytes: &ByteStr) -> Result<Self, Self::Err>;
+    fn from_bstr(bytes: &ByteStr) -> Result<Self, Self::Err>;
 }
 
 pub trait WriteIntoBytes {
-    fn write_into_bytes<W: Write>(&self, bytes: &mut W)
-    -> std::io::Result<()>;
+    fn write_into_bytes<W: Write>(&self, w: &mut W) -> std::io::Result<usize>;
 }
 
-pub trait Pattern: Sized {
+pub trait ToByteString {
+    fn to_bstring(&self) -> ByteString;
+}
+
+pub trait Pattern {
     fn as_bytes(&self) -> &[u8];
 
     fn len(&self) -> usize {
@@ -63,24 +76,90 @@ pub struct ByteString {
 ////////////////////////////////////////////////////////////////////////////////
 //// Implementations
 
-impl<T: ToString> WriteIntoBytes for T {
-    fn write_into_bytes<W: Write>(
-        &self,
-        bytes: &mut W,
-    ) -> std::io::Result<()> {
-        bytes.write_all(self.to_string().as_bytes())
+// require FromStr as local trait
+// impl<T: ConsumeByteStr> std::str::FromStr for T {
+//     type Err = T::Err;
+
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         let (it, n) = Self::consume_bstr(ByteStr::new(s))?;
+
+//         Ok(it)
+//     }
+// }
+
+// conflict
+// impl<T: ToString> WriteIntoBytes for T {
+//     fn write_into_bytes<W: Write>(
+//         &self,
+//         w: &mut W,
+//     ) -> std::io::Result<usize> {
+//         let s = self.to_string();
+//         let bytes = s.as_bytes();
+//         let n = bytes.len();
+
+//         w.write_all(bytes)?;
+
+//         Ok(n)
+//     }
+// }
+
+impl<T: WriteIntoBytes> ToByteString for T {
+    fn to_bstring(&self) -> ByteString {
+        let mut cursor = std::io::Cursor::new(Vec::new());
+
+        self.write_into_bytes(&mut cursor).unwrap();
+
+        cursor.into_inner().into()
     }
 }
 
-impl<T: Borrow<[u8]> + ?Sized> Pattern for &T {
-    fn as_bytes(&self) -> &[u8] {
-        (*self).borrow()
+impl<T: Pattern + ?Sized> WriteIntoBytes for T {
+    fn write_into_bytes<W: Write>(&self, w: &mut W) -> std::io::Result<usize> {
+        let bytes = self.as_bytes();
+        let n = bytes.len();
+
+        w.write_all(bytes)?;
+
+        Ok(n)
     }
 }
 
-impl Pattern for u8 {
+impl<T: AsRef<[u8]> + ?Sized> Pattern for T {
     fn as_bytes(&self) -> &[u8] {
-        std::slice::from_ref(self)
+        self.as_ref()
+    }
+}
+
+/// const implementation
+impl ByteStr {
+    pub const fn from_bytes(slice: &[u8]) -> &Self {
+        unsafe { &*(slice as *const [u8] as *const ByteStr) }
+    }
+
+    pub const fn from_bytes_mut(slice: &mut [u8]) -> &mut Self {
+        unsafe { &mut *(slice as *mut [u8] as *mut ByteStr) }
+    }
+
+    /// ([..mid), [mid..))
+    pub const fn split_at(&self, mid: usize) -> (&Self, &Self) {
+        let (left, right) = self.value.split_at(mid);
+
+        (Self::from_bytes(left), Self::from_bytes(right))
+    }
+
+    /// ([..mid), [mid..))
+    pub const fn split_at_mut(&mut self, mid: usize) -> (&mut Self, &mut Self) {
+        let (left, right) = self.value.split_at_mut(mid);
+
+        (Self::from_bytes_mut(left), Self::from_bytes_mut(right))
+    }
+
+    pub const fn len(&self) -> usize {
+        self.value.len()
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.value.is_empty()
     }
 }
 
@@ -110,15 +189,15 @@ impl ByteStr {
     }
 
     pub fn new<B: ?Sized + AsRef<[u8]>>(bytes: &B) -> &Self {
-        unsafe { &*(bytes.as_ref() as *const [u8] as *const ByteStr) }
+        Self::from_bytes(bytes.as_ref())
     }
 
     pub fn new_mut<B: ?Sized + AsMut<[u8]>>(bytes: &mut B) -> &mut Self {
-        unsafe { &mut *(bytes.as_mut() as *mut [u8] as *mut ByteStr) }
+        Self::from_bytes_mut(bytes.as_mut())
     }
 
-    pub fn parse_into<F: FromBytesInto>(&self) -> Result<F, F::Err> {
-        F::from_bytes_into(self)
+    pub fn parse<F: FromByteStr>(&self) -> Result<F, F::Err> {
+        F::from_bstr(self)
     }
 
     /// return leftmost occurance if any
@@ -211,7 +290,23 @@ impl ByteStr {
 
         None
     }
+
+    pub fn decode_as_utf8<'a>(
+        &'a self,
+    ) -> Result<&'a str, std::str::Utf8Error> {
+        std::str::from_utf8(self)
+    }
+
+    pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool {
+        let self_slice: &[u8] = self.as_ref();
+        let other_slice: &[u8] = other.as_ref();
+
+        self_slice.eq_ignore_ascii_case(other_slice)
+    }
+
 }
+
+
 
 impl ToOwned for ByteStr {
     type Owned = ByteString;
@@ -324,7 +419,10 @@ impl Index<RangeToInclusive<usize>> for ByteStr {
 }
 
 impl IndexMut<RangeToInclusive<usize>> for ByteStr {
-    fn index_mut(&mut self, index: RangeToInclusive<usize>) -> &mut Self::Output {
+    fn index_mut(
+        &mut self,
+        index: RangeToInclusive<usize>,
+    ) -> &mut Self::Output {
         Self::new_mut(&mut self.value[index])
     }
 }
@@ -366,7 +464,10 @@ impl Index<RangeInclusive<usize>> for ByteStr {
 }
 
 impl IndexMut<RangeInclusive<usize>> for ByteStr {
-    fn index_mut(&mut self, index: RangeInclusive<usize>) -> &mut Self::Output {
+    fn index_mut(
+        &mut self,
+        index: RangeInclusive<usize>,
+    ) -> &mut Self::Output {
         Self::new_mut(&mut self.value[index])
     }
 }
@@ -409,7 +510,6 @@ impl<B: ?Sized + AsRef<[u8]>> PartialEq<B> for ByteStr {
     }
 }
 
-
 impl ByteString {
     pub fn push(&mut self, value: u8) {
         self.value.push(value)
@@ -433,6 +533,16 @@ impl ByteString {
         Self {
             value: self.value.split_off(at),
         }
+    }
+
+    pub fn decode_into_utf8(
+        self,
+    ) -> Result<String, std::string::FromUtf8Error> {
+        String::from_utf8(self.value)
+    }
+
+    pub fn as_bstr(&self) -> &ByteStr {
+        self.deref()
     }
 }
 
@@ -518,6 +628,16 @@ impl<'a> Extend<&'a u8> for ByteString {
     }
 }
 
+impl<B: ?Sized + AsRef<[u8]>> PartialEq<B> for ByteString {
+    fn eq(&self, other: &B) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//// Functions
+
+
 ////////////////////////////////////////////////////////////////////////////////
 //// Modules
 
@@ -563,11 +683,11 @@ mod require_cow {
         }
     }
 
-    impl<T: ConsumeBytesInto> FromBytesInto for T {
+    impl<T: ConsumeByteStr> FromByteStr for T {
         type Err = T::Err;
 
-        fn from_bytes_into(bytes: &ByteStr) -> Result<Self, Self::Err> {
-            let (it, _offset) = T::consume_bytes_into(bytes)?;
+        fn from_bstr(bytes: &ByteStr) -> Result<Self, Self::Err> {
+            let (it, _offset) = T::consume_bstr(bytes)?;
             Ok(it)
         }
     }
@@ -575,6 +695,86 @@ mod require_cow {
 
 #[cfg(feature = "cow")]
 pub use require_cow::*;
+
+#[cfg(feature = "nom")]
+mod support_nom {
+    use std::{iter::{Copied, Enumerate}, slice::Iter};
+
+    use nom::{AsBytes, Compare, Input, Offset};
+
+    use super::*;
+
+    // impl Offset for ByteStr {
+    //     fn offset(&self, second: &Self) -> usize {
+    //         self.value.offset(&second)
+    //     }
+    // }
+
+    impl<'a> Offset for &'a ByteStr {
+        fn offset(&self, second: &Self) -> usize {
+            self.value.offset(&second.value)
+        }
+    }
+
+    impl<'a> Input for &'a ByteStr {
+        type Item = u8;
+        type Iter = Copied<Iter<'a, u8>>;
+        type IterIndices = Enumerate<Self::Iter>;
+
+        fn input_len(&self) -> usize {
+            (&self.value).input_len()
+        }
+
+        fn take(&self, index: usize) -> Self {
+            ByteStr::from_bytes(Input::take(&&self.value, index))
+        }
+
+        fn take_from(&self, index: usize) -> Self {
+            ByteStr::from_bytes((&self.value).take_from(index))
+        }
+
+        fn take_split(&self, index: usize) -> (Self, Self) {
+            let (left, right) = (&self.value).take_split(index);
+
+            (ByteStr::from_bytes(left), ByteStr::from_bytes(right))
+        }
+
+        fn position<P>(&self, predicate: P) -> Option<usize>
+          where
+            P: Fn(Self::Item) -> bool {
+            (&self.value).position(predicate)
+        }
+
+        fn iter_elements(&self) -> Self::Iter {
+            (&self.value).iter_elements()
+        }
+
+        fn iter_indices(&self) -> Self::IterIndices {
+            (&self.value).iter_indices()
+        }
+
+        fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
+            (&self.value).slice_index(count)
+        }
+    }
+
+    impl<'a> AsBytes for &'a ByteStr {
+        fn as_bytes(&self) -> &[u8] {
+            &self.value
+        }
+    }
+
+    impl<'a, 'b> Compare<&'b str> for &'a ByteStr {
+        fn compare(&self, t: &'b str) -> nom::CompareResult {
+            (&self.value).compare(t.as_bytes())
+        }
+
+        fn compare_no_case(&self, t: &'b str) -> nom::CompareResult {
+            (&self.value).compare_no_case(t.as_bytes())
+        }
+    }
+}
+
 
 
 #[cfg(test)]
@@ -592,6 +792,8 @@ mod tests {
         assert_eq!(&a, &b);
         assert_eq!(&b, &a.as_slice());
         assert_eq!(b, a.as_slice());
+
+        assert_eq!(ByteStr::new("\r\n"), b"\r\n");
     }
 
     #[cfg(feature = "bitmap")]

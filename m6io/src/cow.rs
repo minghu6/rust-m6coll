@@ -79,7 +79,7 @@ where
         match &mut self.value {
             FlatCow::Borrowed { start, end, .. } => {
                 assert!(
-                    *start != 0 || *end != 0,
+                    *start == 0,
                     "buf has started at {:?}",
                     start..end
                 );
@@ -312,10 +312,10 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
-            write!(f, "{:#?}", self)
+            write!(f, "{:#?}", self.as_ref())
         }
         else {
-            write!(f, "{:?}", self)
+            write!(f, "{:?}", self.as_ref())
         }
     }
 }
@@ -326,7 +326,7 @@ where
     B::Owned: Deref<Target = B>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{}", self.as_ref())
     }
 }
 
@@ -429,7 +429,8 @@ fn flatcow_union_range<I: RangeBounds<usize>>(
 
     let start2 = match r2.start_bound().cloned() {
         Included(start2) => start2,
-        _ => unimplemented!(),
+        Excluded(..) => unreachable!(),
+        Unbounded => 0,
     };
 
     let end2 = match r2.end_bound().cloned() {
@@ -447,12 +448,12 @@ fn flatcow_union_range<I: RangeBounds<usize>>(
 ////////////////////////////////////////////////////////////////////////////////
 //// Modules
 
-#[cfg(feature = "bytestr")]
+#[cfg(feature = "bstr")]
 mod support_bytestr {
     use core::slice::SlicePattern;
 
     use super::*;
-    use crate::bytestr::{ByteStr, ByteString};
+    use crate::bstr::{ByteStr, ByteString};
 
     impl SliceLike for ByteStr {
         fn len(&self) -> usize {
@@ -544,6 +545,8 @@ mod tests {
     fn test_flat_cow() {
         let v = ('a'..'j').into_iter().collect::<String>();
         let cow = FlatCow::<str>::borrow_new(&v[..]);
+
+        println!("{cow}");
 
         assert_eq!(&cow[1..8], "bcdefgh");
 
