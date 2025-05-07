@@ -1,6 +1,8 @@
 #![feature(trait_alias)]
 #![feature(slice_pattern)]
 #![feature(ascii_char)]
+#![feature(ascii_char_variants)]
+#![feature(str_from_raw_parts)]
 
 #[cfg(feature = "cow")]
 mod cow;

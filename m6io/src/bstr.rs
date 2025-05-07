@@ -3,13 +3,10 @@
 //!
 
 use std::{
-    borrow::{Borrow, BorrowMut},
-    io::Write,
-    ops::{
+    borrow::{Borrow, BorrowMut}, fmt::{Debug, Display}, io::Write, ops::{
         Deref, DerefMut, Index, IndexMut, Range, RangeFrom, RangeFull,
         RangeInclusive, RangeTo, RangeToInclusive,
-    },
-    slice::SliceIndex,
+    }, slice::SliceIndex
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -61,13 +58,13 @@ pub trait Pattern {
 ////////////////////////////////////////////////////////////////////////////////
 //// Structures
 
-#[derive(Debug, Eq, PartialOrd, Ord, Hash)]
+#[derive(Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct ByteStr {
     value: [u8],
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct ByteString {
     value: Vec<u8>,
@@ -140,7 +137,13 @@ impl ByteStr {
         unsafe { &mut *(slice as *mut [u8] as *mut ByteStr) }
     }
 
+    pub const unsafe fn from_bytes_permanently<'i, 'o>(slice: &'i [u8]) -> &'o Self {
+        unsafe { Self::from_raw_parts(slice.as_ptr(), slice.len()) }
+    }
+
     /// ([..mid), [mid..))
+    ///
+    /// Panics if mid > len
     pub const fn split_at(&self, mid: usize) -> (&Self, &Self) {
         let (left, right) = self.value.split_at(mid);
 
@@ -148,7 +151,10 @@ impl ByteStr {
     }
 
     /// ([..mid), [mid..))
-    pub const fn split_at_mut(&mut self, mid: usize) -> (&mut Self, &mut Self) {
+    pub const fn split_at_mut(
+        &mut self,
+        mid: usize,
+    ) -> (&mut Self, &mut Self) {
         let (left, right) = self.value.split_at_mut(mid);
 
         (Self::from_bytes_mut(left), Self::from_bytes_mut(right))
@@ -160,6 +166,22 @@ impl ByteStr {
 
     pub const fn is_empty(&self) -> bool {
         self.value.is_empty()
+    }
+
+    pub const unsafe fn from_raw_parts<'a>(
+        ptr: *const u8,
+        len: usize,
+    ) -> &'a Self {
+        Self::from_bytes(unsafe { std::slice::from_raw_parts(ptr, len) })
+    }
+
+    pub const unsafe fn from_raw_parts_mut<'a>(
+        ptr: *mut u8,
+        len: usize,
+    ) -> &'a mut Self {
+        Self::from_bytes_mut(unsafe {
+            std::slice::from_raw_parts_mut(ptr, len)
+        })
     }
 }
 
@@ -306,7 +328,27 @@ impl ByteStr {
 
 }
 
+impl Display for ByteStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for b in &self.value {
+            pretty_debug_u8(f, *b)?;
+        }
 
+        Ok(())
+    }
+}
+
+impl Debug for ByteStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // if f.alternate() {
+        //     write!(f, "b\"{self}\" ")
+        // }
+        // else {
+        //     f.debug_struct("ByteStr").field("value", &&self.value).finish()
+        // }
+        write!(f, "b\"{self}\" ")
+    }
+}
 
 impl ToOwned for ByteStr {
     type Owned = ByteString;
@@ -529,6 +571,10 @@ impl ByteString {
         }
     }
 
+    ///
+    /// Returns a newly allocated vector containing the elements in the range [at, len).
+    /// After the call, the original vector will be left containing the elements [0, at)
+    /// with its previous capacity unchanged.
     pub fn split_off(&mut self, at: usize) -> Self {
         Self {
             value: self.value.split_off(at),
@@ -543,6 +589,23 @@ impl ByteString {
 
     pub fn as_bstr(&self) -> &ByteStr {
         self.deref()
+    }
+}
+
+impl Display for ByteString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_bstr())
+    }
+}
+
+impl Debug for ByteString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "{:#?}", self.as_bstr())
+        }
+        else {
+            write!(f, "{:?}", self.as_bstr())
+        }
     }
 }
 
@@ -584,6 +647,12 @@ impl BorrowMut<ByteStr> for ByteString {
     }
 }
 
+impl From<&ByteStr> for ByteString {
+    fn from(value: &ByteStr) -> Self {
+        value.to_vec().into()
+    }
+}
+
 impl<const N: usize> From<&[u8; N]> for ByteString {
     fn from(value: &[u8; N]) -> Self {
         value.to_vec().into()
@@ -602,9 +671,21 @@ impl From<Vec<u8>> for ByteString {
     }
 }
 
+impl From<Box<[u8]>> for ByteString {
+    fn from(value: Box<[u8]>) -> Self {
+        Self { value: value.to_vec() }
+    }
+}
+
 impl Into<Vec<u8>> for ByteString {
     fn into(self) -> Vec<u8> {
         self.value
+    }
+}
+
+impl Into<Box<[u8]>> for ByteString {
+    fn into(self) -> Box<[u8]> {
+        self.value.into_boxed_slice()
     }
 }
 
@@ -637,6 +718,45 @@ impl<B: ?Sized + AsRef<[u8]>> PartialEq<B> for ByteString {
 ////////////////////////////////////////////////////////////////////////////////
 //// Functions
 
+fn pretty_debug_u8(f: &mut std::fmt::Formatter<'_>, b: u8) -> std::fmt::Result {
+    match b {
+        0 => write!(f, "\\NUL"),
+        1 => write!(f, "\\SOH"),
+        2 => write!(f, "\\STX"),
+        3 => write!(f, "\\ETX"),
+        4 => write!(f, "\\EOT"),
+        5 => write!(f, "\\ENQ"),
+        6 => write!(f, "\\ACK"),
+        7 => write!(f, "\\BEL"),
+        8 => write!(f, "\\BS"),
+        9 => write!(f, "\\HT"),
+        10 => write!(f, "\\LF"),
+        11 => write!(f, "\\VT"),
+        12 => write!(f, "\\FF"),
+        13 => write!(f, "\\CR"),
+        14 => write!(f, "\\SO"),
+        15 => write!(f, "\\SI"),
+        16 => write!(f, "\\DLE"),
+        17 => write!(f, "\\DC1"),
+        18 => write!(f, "\\DC2"),
+        19 => write!(f, "\\DC3"),
+        20 => write!(f, "\\DC4"),
+        21 => write!(f, "\\NAK"),
+        22 => write!(f, "\\SYN"),
+        23 => write!(f, "\\ETB"),
+        24 => write!(f, "\\CAN"),
+        25 => write!(f, "\\EM"),
+        26 => write!(f, "\\SUB"),
+        27 => write!(f, "\\ESC"),
+        28 => write!(f, "\\FS"),
+        29 => write!(f, "\\GS"),
+        30 => write!(f, "\\RS"),
+        31 => write!(f, "\\US"),
+        32..=126 => write!(f, "{}", b as char),
+        127 => write!(f, "DEL"),
+        128.. => write!(f, "\\x{b:X}"),
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Modules
@@ -657,7 +777,6 @@ mod require_cow {
             bytes: &FlatCow<'i, ByteStr>,
         ) -> Result<(Self, usize), Self::Err>;
     }
-
 
     pub trait FromBytesAs<'o>: Sized {
         type Err;
@@ -698,7 +817,10 @@ pub use require_cow::*;
 
 #[cfg(feature = "nom")]
 mod support_nom {
-    use std::{iter::{Copied, Enumerate}, slice::Iter};
+    use std::{
+        iter::{Copied, Enumerate},
+        slice::Iter,
+    };
 
     use nom::{AsBytes, Compare, Input, Offset};
 
@@ -740,8 +862,9 @@ mod support_nom {
         }
 
         fn position<P>(&self, predicate: P) -> Option<usize>
-          where
-            P: Fn(Self::Item) -> bool {
+        where
+            P: Fn(Self::Item) -> bool,
+        {
             (&self.value).position(predicate)
         }
 
@@ -783,6 +906,11 @@ mod tests {
     use core::slice::SlicePattern;
 
     use super::*;
+
+    #[test]
+    fn test_pretty_print_u8() {
+        println!("{:#?}", ByteStr::new("a\u{AF}\u{0}"))
+    }
 
     #[test]
     fn test_partial_eq() {
