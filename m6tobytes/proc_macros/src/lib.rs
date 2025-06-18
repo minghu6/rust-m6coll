@@ -160,11 +160,11 @@ pub fn derive_to_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     expanded.extend(quote! {
-        impl Into<#ty> for #name {
-            fn into(self) -> #ty {
-                self.to_bits()
-            }
-        }
+        // impl Into<#ty> for #name {
+        //     fn into(self) -> #ty {
+        //         self.to_bits()
+        //     }
+        // }
 
         #item
     });
@@ -172,7 +172,7 @@ pub fn derive_to_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// impl `pub fn from_xx(value: #ty) -> Self`
+/// impl `pub unsafe fn from_bits(value: #ty) -> Self`
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn derive_from_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -184,11 +184,36 @@ pub fn derive_from_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
         unimplemented!()
     };
 
-    let fname = ident!(format!("from_{}", ty.to_string()).as_str());
+    // let fname = ident!(format!("from_{}", ty.to_string()).as_str());
 
     TokenStream::from(quote! {
         impl #name {
-            pub unsafe fn #fname(value: #ty) -> Self {
+            pub unsafe fn from_bits(value: #ty) -> Self {
+                unsafe { std::mem::transmute(value) }
+            }
+        }
+
+        #item
+    })
+}
+
+/// impl safe `fn from_bits(value: #ty) -> Self`
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn safe_derive_from_bits(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(item as Item);
+    let ty = parse_macro_input!(attr as Ident);
+
+    let Some(name) = parse_item_name(&item)
+    else {
+        unimplemented!()
+    };
+
+    // let fname = ident!(format!("from_{}", ty.to_string()).as_str());
+
+    TokenStream::from(quote! {
+        impl #name {
+            pub fn from_bits(value: #ty) -> Self {
                 unsafe { std::mem::transmute(value) }
             }
         }

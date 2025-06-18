@@ -3,16 +3,16 @@
 #![feature(ascii_char)]
 #![feature(ascii_char_variants)]
 #![feature(str_from_raw_parts)]
+#![feature(new_zeroed_alloc)]
+#![feature(allocator_api)]
+#![feature(ptr_alignment_type)]
+#![feature(pointer_try_cast_aligned)]
 
 #[cfg(feature = "cow")]
-mod cow;
+pub mod cow;
 #[cfg(feature = "bstr")]
-mod bstr;
-
+pub mod bstr;
+#[cfg(feature = "rawbuf")]
+pub mod rawbuf;
 #[cfg(feature = "nom")]
 pub mod nom;
-
-#[cfg(feature = "bstr")]
-pub use bstr::*;
-#[cfg(feature = "cow")]
-pub use cow::*;

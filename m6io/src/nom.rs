@@ -507,7 +507,7 @@ pub mod byte {
     mod tests {
 
         use super::*;
-        use crate::ByteStr;
+        use crate::bstr::ByteStr;
 
         #[test]
         fn test_satisfy() {

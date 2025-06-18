@@ -1,17 +1,31 @@
+#![feature(box_as_ptr)]
+#![feature(slice_ptr_get)]
+#![feature(box_vec_non_null)]
+#![feature(unsafe_cell_access)]
+
 use std::{
-    borrow::{Borrow, BorrowMut}, cell::OnceCell, ops::{Deref, DerefMut}, ptr::NonNull, sync::Arc
+    borrow::{Borrow, BorrowMut},
+    cell::{OnceCell, UnsafeCell},
+    ops::{Deref, DerefMut},
+    ptr::NonNull,
+    sync::{LazyLock, LockResult, RwLock, RwLockReadGuard},
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Structures
 
+////////////////////////////////////////
+//// Intrusive Structure Model
+
+///
+///
 /// Owned pointer =derive=> Ptr
 ///
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct OwnedPtr<T: ?Sized> {
-    value: NonNull<T>,
+    value: Box<T>,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -20,35 +34,53 @@ pub struct Ptr<T: ?Sized> {
     value: NonNull<T>,
 }
 
-/// Arc pointer =derive=> RoPtr
-///
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-#[repr(transparent)]
-pub struct ArcPtr<T: ?Sized> {
-    value: Arc<OwnedPtr<T>>,
-}
+////////////////////////////////////////
+//// Self-referential Structure Model
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-#[repr(transparent)]
-pub struct RoPtr<T: ?Sized> {
-    value: Ptr<T>,
-}
+
+////////////////////////////////////////
+//// Static Variables
 
 /// Init (once) on main thread, shared bettwen threads
+///
+/// should be defined static variable not const
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct OnceStatic<T> {
-    cell: OnceCell<T>
+    cell: OnceCell<T>,
+}
+
+#[repr(transparent)]
+pub struct LazyStatic<T, F = fn() -> T> {
+    value: UnsafeCell<RwLock<LazyLock<T, F>>>,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Implementations
 
-unsafe impl<T> Sync for OnceStatic<T> {}
+impl<T, F: FnOnce() -> T> LazyStatic<T, F> {
+    pub const fn new(f: F) -> Self {
+        Self {
+            value: UnsafeCell::new(RwLock::new(LazyLock::new(f))),
+        }
+    }
+
+    pub fn get_mut(&self) -> LockResult<&mut LazyLock<T, F>> {
+        unsafe { self.value.as_mut_unchecked().get_mut() }
+    }
+
+    pub fn read(&self) -> LockResult<RwLockReadGuard<'_, LazyLock<T, F>>> {
+        unsafe { self.value.as_ref_unchecked().read() }
+    }
+}
+
+unsafe impl<T, F> Sync for LazyStatic<T, F> {}
 
 impl<T> OnceStatic<T> {
     pub const fn new() -> Self {
-        Self { cell: OnceCell::new() }
+        Self {
+            cell: OnceCell::new(),
+        }
     }
 
     ///
@@ -61,7 +93,7 @@ impl<T> OnceStatic<T> {
     }
 }
 
-impl <T> Deref for OnceStatic<T> {
+impl<T> Deref for OnceStatic<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -69,129 +101,75 @@ impl <T> Deref for OnceStatic<T> {
     }
 }
 
-impl<T: ?Sized> RoPtr<T> {
-    pub fn as_ref(&self) -> &T {
-        self.value.as_ref()
-    }
-}
-
-impl<T: ?Sized> Deref for RoPtr<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.value.as_ref()
-    }
-}
-
-impl<T> ArcPtr<T> {
-    pub fn new(value: T) -> Self {
-        Self {
-            value: Arc::new(OwnedPtr::new(value)),
-        }
-    }
-}
-
-impl<T: ?Sized> ArcPtr<T> {
-    pub fn from_box(value: Box<T>) -> Self {
-        Self {
-            value: Arc::new(OwnedPtr::from_box(value)),
-        }
-    }
-
-    pub fn as_ref(&self) -> &T {
-        self.value.as_ref()
-    }
-
-    pub fn ptr(&self) -> RoPtr<T> {
-        RoPtr {
-            value: self.value.ptr(),
-        }
-    }
-}
-
-impl<T: ?Sized> Deref for ArcPtr<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.value.as_ref()
-    }
-}
+unsafe impl<T> Sync for OnceStatic<T> {}
 
 impl<T> OwnedPtr<T> {
     pub fn new(value: T) -> Self {
         Self {
-            value: NonNull::new(Box::into_raw(Box::new(value))).unwrap(),
+            value: Box::new(value),
         }
     }
 }
+
+unsafe impl<T: Sync> Sync for OwnedPtr<T> {}
 
 impl<T: ?Sized> OwnedPtr<T> {
     pub fn from_box(value: Box<T>) -> Self {
-        Self {
-            value: NonNull::new(Box::into_raw(value)).unwrap(),
-        }
-    }
-
-    pub fn as_ref(&self) -> &T {
-        unsafe { &*self.value.as_ptr() }
-    }
-
-    pub fn as_mut(&self) -> &mut T {
-        unsafe { &mut *self.value.as_ptr() }
+        Self { value }
     }
 
     pub fn ptr(&self) -> Ptr<T> {
-        Ptr { value: self.value }
-    }
-}
-
-impl<T: ?Sized> Drop for OwnedPtr<T> {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = Box::from_raw(self.value.as_ptr());
+        Ptr {
+            value: unsafe {
+                NonNull::new_unchecked(Box::as_ptr(&self.value) as _)
+            },
         }
     }
 }
+
+// impl<T: ?Sized> Drop for OwnedPtr<T> {
+//     fn drop(&mut self) {
+//         unsafe {
+//             let _ = Box::from_raw(self.value.as_ptr());
+//         }
+//     }
+// }
 
 impl<T: ?Sized> Deref for OwnedPtr<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.as_ref()
+        &self.value
     }
 }
 
 impl<T: ?Sized> DerefMut for OwnedPtr<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.as_mut()
+        self.value.as_mut()
     }
 }
 
 impl<T: ?Sized> Borrow<T> for OwnedPtr<T> {
     fn borrow(&self) -> &T {
-        self.as_ref()
+        self
     }
 }
 
 impl<T: ?Sized> BorrowMut<T> for OwnedPtr<T> {
     fn borrow_mut(&mut self) -> &mut T {
-        self.as_mut()
+        self
     }
 }
 
-impl<T: ?Sized> Ptr<T> {
-    pub fn as_ref(&self) -> &T {
-        unsafe { &*self.value.as_ptr() }
-    }
-
-    pub fn as_mut(&self) -> &mut T {
-        unsafe { &mut *self.value.as_ptr() }
-    }
-
+impl<T> Ptr<T> {
     pub fn ptr_eq(this: &Self, other: &Self) -> bool {
         std::ptr::eq(this.value.as_ptr(), other.value.as_ptr())
     }
 }
+
+unsafe impl<T: Sync + ?Sized> Sync for Ptr<T> {}
+
+unsafe impl<T: ?Sized> Send for Ptr<T> {}
 
 impl<T: ?Sized> Clone for Ptr<T> {
     fn clone(&self) -> Self {
@@ -205,33 +183,27 @@ impl<T: ?Sized> Deref for Ptr<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.as_ref()
+        unsafe { self.value.as_ref() }
     }
 }
 
 impl<T: ?Sized> DerefMut for Ptr<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.as_mut()
+        unsafe { self.value.as_mut() }
     }
 }
 
 impl<T: ?Sized> Borrow<T> for Ptr<T> {
     fn borrow(&self) -> &T {
-        self.as_ref()
+        self
     }
 }
 
 impl<T: ?Sized> BorrowMut<T> for Ptr<T> {
     fn borrow_mut(&mut self) -> &mut T {
-        self.as_mut()
+        self
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Functions
-
-
-#[cfg(test)]
-mod tests {
-
-}

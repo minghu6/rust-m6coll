@@ -10,7 +10,7 @@ pub trait FromBytes: Sized {
     fn from_le_bytes(bytes: [u8; size_of::<Self>()]) -> Self;
     fn from_be_bytes(bytes: [u8; size_of::<Self>()]) -> Self;
     fn from_ne_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
-        if cfg!(target_endian="little") {
+        if cfg!(target_endian = "little") {
             Self::from_le_bytes(bytes)
         }
         else {
@@ -23,7 +23,7 @@ pub trait ToBytes: Sized {
     fn to_le_bytes(self) -> [u8; size_of::<Self>()];
     fn to_be_bytes(self) -> [u8; size_of::<Self>()];
     fn to_ne_bytes(self) -> [u8; size_of::<Self>()] {
-        if cfg!(target_endian="little") {
+        if cfg!(target_endian = "little") {
             self.to_le_bytes()
         }
         else {
@@ -32,14 +32,13 @@ pub trait ToBytes: Sized {
     }
 }
 
-// pub trait ToBits: Sized {
-//     type Int where size_of::<Self> == size_of::<Self::Int>();
-
-//     fn to_bits(self) -> Self::Int;
+// pub trait PtrRead<T>: Sized {
+//     fn read(t: &[u8]) -> T;
 // }
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Implementations
+
 
 impl FromBytes for u8 {
     fn from_le_bytes(bytes: [u8; size_of::<Self>()]) -> Self {
@@ -121,13 +120,51 @@ impl ToBytes for u64 {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//// Functions
+
+/// WARNING: use &&T, &&&T would cause UB
+pub fn as_raw_slice<'a, T>(t: &T) -> &'a [u8] {
+    unsafe {
+        std::slice::from_raw_parts(
+            core::ptr::from_ref(t) as *const u8,
+            size_of::<T>(),
+        )
+    }
+}
+
+/// WARNING: use &&T, &&&T would cause UB
+pub fn as_raw_mut_slice<T>(t: &mut T) -> &mut [u8] {
+    unsafe {
+        std::slice::from_raw_parts_mut(
+            core::ptr::from_mut(t) as *mut u8,
+            size_of::<T>(),
+        )
+    }
+}
+
+pub fn from_raw_slice<T>(slice: &[u8]) -> T {
+    assert!(slice.len() >= size_of::<T>());
+
+    unsafe { std::ptr::read_unaligned(slice.as_ptr() as *const T) }
+}
+
+// pub fn from_raw_mut_slice<T>(slice: &mut [u8]) -> &mut T {
+//     assert!(slice.len() >= size_of::<T>());
+
+//     unsafe {
+//         &mut *slice.as_mut_ptr().cast::<T>()
+//     }
+// }
+
+
+
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn test_array_copy() {
-        let mut arr = [1, 2, size_of::<u8>()
-        ];
+        let mut arr = [1, 2, size_of::<u8>()];
 
         arr[2..3].copy_from_slice(&[4]);
     }
