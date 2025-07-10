@@ -55,7 +55,7 @@ impl<T> Stack<T> {
     }
 
     /// FIFO
-    pub fn queue_iter(&self) -> AnIteratorWrapper<&T> {
+    pub fn queue_iter(&self) -> AnIteratorWrapper<'_, &T> {
         AnIteratorWrapper {
             iter: Box::new(self._value_vec.iter()),
         }

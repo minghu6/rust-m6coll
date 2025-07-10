@@ -46,8 +46,8 @@ pub fn deftoent(input: TokenStream) -> TokenStream {
 
     /* Define Structure */
 
-    let lbrace = lbrace();
-    let rbrace = rbrace();
+    let _lbrace = lbrace();
+    let _rbrace = rbrace();
     let sign_less = sign_less();
     let sign_gt = sign_gt();
 

@@ -9,8 +9,6 @@
 #![feature(min_specialization)]
 #![feature(array_into_iter_constructors)]
 #![feature(maybe_uninit_array_assume_init)]
-#![feature(maybe_uninit_uninit_array)]
-#![feature(ptr_sub_ptr)]
 #![allow(path_statements)]
 
 pub mod ordered_arr;
@@ -18,7 +16,7 @@ pub mod ordered_arr;
 use std::{
     alloc::{alloc_zeroed, Layout},
     fmt,
-    intrinsics::copy_nonoverlapping,
+    ptr::copy_nonoverlapping,
     ops::{Deref, DerefMut, Index, IndexMut},
     ptr::{self, null_mut},
     slice::{self, SliceIndex},

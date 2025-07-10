@@ -8,7 +8,7 @@ use std::{
     cell::{OnceCell, UnsafeCell},
     ops::{Deref, DerefMut},
     ptr::NonNull,
-    sync::{LazyLock, LockResult, RwLock, RwLockReadGuard},
+    sync::{LazyLock, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 
@@ -65,12 +65,12 @@ impl<T, F: FnOnce() -> T> LazyStatic<T, F> {
         }
     }
 
-    pub fn get_mut(&self) -> LockResult<&mut LazyLock<T, F>> {
-        unsafe { self.value.as_mut_unchecked().get_mut() }
-    }
-
     pub fn read(&self) -> LockResult<RwLockReadGuard<'_, LazyLock<T, F>>> {
         unsafe { self.value.as_ref_unchecked().read() }
+    }
+
+    pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, LazyLock<T, F>>> {
+        unsafe { self.value.as_ref_unchecked().write() }
     }
 }
 
