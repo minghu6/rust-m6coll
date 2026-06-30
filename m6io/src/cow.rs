@@ -450,14 +450,12 @@ fn flatcow_union_range<I: RangeBounds<usize>>(
 
 #[cfg(feature = "bstr")]
 mod support_bytestr {
-    use core::slice::SlicePattern;
-
     use super::*;
     use crate::bstr::{ByteStr, ByteString};
 
     impl SliceLike for ByteStr {
         fn len(&self) -> usize {
-            self.as_slice().len()
+            <ByteStr as AsRef<[u8]>>::as_ref(self).len()
         }
     }
 

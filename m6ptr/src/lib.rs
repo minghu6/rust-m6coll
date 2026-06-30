@@ -1,11 +1,10 @@
-#![feature(box_as_ptr)]
-#![feature(slice_ptr_get)]
-#![feature(box_vec_non_null)]
 #![feature(unsafe_cell_access)]
 
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::{OnceCell, UnsafeCell},
+    fmt::Debug,
+    hash::Hash,
     ops::{Deref, DerefMut},
     ptr::NonNull,
     sync::{LazyLock, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -22,13 +21,16 @@ use std::{
 ///
 /// Owned pointer =derive=> Ptr
 ///
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// # Note
+///
+/// derive by value T instead of pointer to T
+///
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct OwnedPtr<T: ?Sized> {
     value: Box<T>,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct Ptr<T: ?Sized> {
     value: NonNull<T>,
@@ -93,6 +95,8 @@ impl<T> OnceStatic<T> {
     }
 }
 
+unsafe impl<T> Sync for OnceStatic<T> {}
+
 impl<T> Deref for OnceStatic<T> {
     type Target = T;
 
@@ -101,17 +105,19 @@ impl<T> Deref for OnceStatic<T> {
     }
 }
 
-unsafe impl<T> Sync for OnceStatic<T> {}
-
 impl<T> OwnedPtr<T> {
     pub fn new(value: T) -> Self {
         Self {
             value: Box::new(value),
         }
     }
-}
 
-unsafe impl<T: Sync> Sync for OwnedPtr<T> {}
+    pub fn into_inner(owned: Self) -> T {
+        // Deref never allows move operations. Box allows it because it's special,
+        // and the * operator on box isn't actually using the Deref trait.
+        *owned.value
+    }
+}
 
 impl<T: ?Sized> OwnedPtr<T> {
     pub fn from_box(value: Box<T>) -> Self {
@@ -127,13 +133,7 @@ impl<T: ?Sized> OwnedPtr<T> {
     }
 }
 
-// impl<T: ?Sized> Drop for OwnedPtr<T> {
-//     fn drop(&mut self) {
-//         unsafe {
-//             let _ = Box::from_raw(self.value.as_ptr());
-//         }
-//     }
-// }
+unsafe impl<T: Sync> Sync for OwnedPtr<T> {}
 
 impl<T: ?Sized> Deref for OwnedPtr<T> {
     type Target = T;
@@ -158,6 +158,12 @@ impl<T: ?Sized> Borrow<T> for OwnedPtr<T> {
 impl<T: ?Sized> BorrowMut<T> for OwnedPtr<T> {
     fn borrow_mut(&mut self) -> &mut T {
         self
+    }
+}
+
+impl<T: Debug> Debug for OwnedPtr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        T::fmt(self, f)
     }
 }
 
@@ -204,6 +210,39 @@ impl<T: ?Sized> BorrowMut<T> for Ptr<T> {
         self
     }
 }
+
+impl<T: Debug> Debug for Ptr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        T::fmt(self, f)
+    }
+}
+
+impl<T: PartialEq + ?Sized> PartialEq for Ptr<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.deref() == other.deref()
+    }
+}
+
+impl<T: Eq + ?Sized> Eq for Ptr<T> {}
+
+impl<T: PartialOrd + ?Sized> PartialOrd for Ptr<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.deref().partial_cmp(other.deref())
+    }
+}
+
+impl<T: Ord + ?Sized> Ord for Ptr<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.deref().cmp(other.deref())
+    }
+}
+
+impl<T: Hash + ?Sized> Hash for Ptr<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.deref().hash(state);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Functions

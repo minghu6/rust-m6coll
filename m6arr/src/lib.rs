@@ -1,14 +1,4 @@
-#![feature(allocator_api)]
-#![feature(trusted_random_access)]
-#![feature(iter_next_chunk)]
-#![feature(iter_advance_by)]
-#![feature(exact_size_is_empty)]
-#![feature(dropck_eyepatch)]
-#![feature(inplace_iteration)]
-#![feature(trusted_len)]
 #![feature(min_specialization)]
-#![feature(array_into_iter_constructors)]
-#![feature(maybe_uninit_array_assume_init)]
 #![allow(path_statements)]
 
 pub mod ordered_arr;

@@ -48,7 +48,11 @@ impl<K: Ord, V> Ord for KVEntry<K, V> {
     }
 }
 
-
+impl<K, V> Into<(K, V)> for KVEntry<K, V> {
+    fn into(self) -> (K, V) {
+        (self.0, self.1)
+    }
+}
 
 
 
